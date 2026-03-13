@@ -831,7 +831,7 @@ function renderEmoteGrid(){
     div.className='ep-item';
     div.title=e.name+' ('+e.source+')';
     div.innerHTML=`<img src="${e.url}" alt="${esc(e.name)}" loading="lazy"><span class="ep-tip">${esc(e.name)}</span>`;
-    div.onclick=()=>insertEmote(e.name);
+    div.onmousedown=(ev)=>{ev.preventDefault();insertEmote(e.name);};
     grid.appendChild(div);
   });
 }
@@ -868,7 +868,7 @@ function showAc(query){
     div.className = 'ac-item';
     div.dataset.idx = i;
     div.innerHTML = `<img src="${e.url}" alt="${esc(e.name)}"><span class="ac-name">${esc(e.name)}</span><span class="ac-src">${e.source}</span>`;
-    div.onclick = () => commitAc(e.name);
+    div.onmousedown = (ev) => { ev.preventDefault(); commitAc(e.name); };
     ac.appendChild(div);
   });
   ac.classList.add('open');
@@ -892,14 +892,16 @@ function moveAcSelection(dir){
 
 function commitAc(name){
   const inp = el('chatInput');
-  const val = getChatText();
-  const cursor = getCaretTextOffsetSimple();
+  const val = inp.value;
+  const cursor = inp.selectionStart;
   const textToCursor = val.slice(0, cursor);
   const colonIdx = textToCursor.lastIndexOf(':');
   if(colonIdx === -1){ closeAc(); return; }
-  const emote=allEmotes.find(e=>e.name===name);
-  const url=emote?emote.url:null;
-  _replaceColonQuery(colonIdx, cursor, name, url);
+  const after = val.slice(cursor);
+  inp.value = val.slice(0, colonIdx) + name + ' ' + after;
+  const pos = colonIdx + name.length + 1;
+  inp.focus();
+  inp.setSelectionRange(pos, pos);
   closeAc();
 }
 
