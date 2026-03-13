@@ -1149,7 +1149,7 @@ function renderMessages(){
     area.appendChild(buildMsg(msg));
     added=true;
   });
-  if(added&&atBottom) area.scrollTop=area.scrollHeight;
+  if(added&&atBottom){ _programmaticScroll=true; area.scrollTop=area.scrollHeight; setTimeout(()=>{_programmaticScroll=false;},100); }
 }
 
 function buildMsg(msg){
@@ -1728,7 +1728,9 @@ document.addEventListener('keydown', e => { if(e.key==='Escape') closeCtx(); });
 
 
 // ═══════ SCROLL TO BOTTOM BUTTON ═══════
+let _programmaticScroll = false;
 document.getElementById('chatArea').addEventListener('scroll', ()=>{
+  if(_programmaticScroll) return;
   const area = document.getElementById('chatArea');
   const atBottom = area.scrollHeight - area.scrollTop - area.clientHeight < 80;
   const btn = el('scrollToBottomBtn');
@@ -1737,7 +1739,9 @@ document.getElementById('chatArea').addEventListener('scroll', ()=>{
 
 function scrollToBottom(){
   const area = document.getElementById('chatArea');
+  _programmaticScroll = true;
   area.scrollTop = area.scrollHeight;
+  setTimeout(()=>{ _programmaticScroll = false; }, 100);
 }
 
 function renderLoop(){renderMessages();requestAnimationFrame(renderLoop);}
