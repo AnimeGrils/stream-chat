@@ -66,6 +66,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
 .auth-yt{background:rgba(255,68,68,.12);border-color:rgba(255,68,68,.3);color:var(--youtube)}.auth-yt:hover{background:rgba(255,68,68,.22)}
 .auth-yt.authed{background:rgba(34,221,136,.1);border-color:rgba(34,221,136,.3);color:var(--green);cursor:default}
 .logout-btn{background:transparent;border:1px solid var(--border);color:var(--muted);padding:4px 8px;border-radius:5px;font-size:10px;font-weight:600;cursor:pointer;font-family:var(--font);transition:all .12s;display:none}
+.auth-username{font-size:11px;color:var(--muted);font-family:var(--mono);display:none}
+.auth-username.visible{display:inline}
 .logout-btn:hover{border-color:var(--del);color:var(--del)}
 .logout-btn.visible{display:inline-flex}
 
@@ -300,8 +302,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
     <div class="auth-row">
       <span class="auth-label">Log in to send &amp; delete:</span>
       <button class="auth-btn auth-tw" id="auth-tw-btn" onclick="loginTwitch()">Login with Twitch</button>
+      <span class="auth-username" id="tw-username"></span>
       <button class="logout-btn" id="logout-tw-btn" onclick="logoutTwitch()">log out</button>
       <button class="auth-btn auth-yt" id="auth-yt-btn" onclick="loginYoutube()">Login with Google</button>
+      <span class="auth-username" id="yt-username"></span>
       <button class="logout-btn" id="logout-yt-btn" onclick="logoutYoutube()">log out</button>
     </div>
   </div>
@@ -534,7 +538,7 @@ function loginTwitch(){
   sessionStorage.setItem('oauth_pending','twitch');
   const redir=encodeURIComponent(origin());
   const scopes='moderator:manage:chat_messages user:write:chat moderator:manage:banned_users moderator:manage:warnings moderator:read:followers channel:read:subscriptions';
-  window.location.href=`https://id.twitch.tv/oauth2/authorize?client_id=${cfg.twCid}&redirect_uri=${redir}&response_type=token&scope=${encodeURIComponent(scopes)}`;
+  window.location.href=`https://id.twitch.tv/oauth2/authorize?client_id=${cfg.twCid}&redirect_uri=${redir}&response_type=token&force_verify=true&scope=${encodeURIComponent(scopes)}`;
 }
 async function onTwitchAuthed(){
   el('auth-tw-btn').className='auth-btn auth-tw authed';
@@ -549,6 +553,8 @@ async function onTwitchAuthed(){
     twUserId=me.data[0].id;
     twDisplayName=me.data[0].display_name;
     twBroadcasterId=bc.data[0].id;
+    el('tw-username').textContent=twDisplayName;
+    el('tw-username').className='auth-username visible';
     loadTwitchEmotes();
     loadTwitchBadges();
   }catch(e){console.warn('Twitch user lookup failed',e);}
@@ -566,7 +572,7 @@ function loginYoutube(){
   if(!cfg.ytCid){flashErr('YouTube OAuth Client ID not configured.');return;}
   sessionStorage.setItem('oauth_pending','youtube');
   const scope=encodeURIComponent('https://www.googleapis.com/auth/youtube.force-ssl');
-  window.location.href=`https://accounts.google.com/o/oauth2/v2/auth?client_id=${cfg.ytCid}&redirect_uri=${encodeURIComponent(origin())}&response_type=token&scope=${scope}`;
+  window.location.href=`https://accounts.google.com/o/oauth2/v2/auth?client_id=${cfg.ytCid}&redirect_uri=${encodeURIComponent(origin())}&response_type=token&prompt=select_account&scope=${scope}`;
 }
 function onYoutubeAuthed(){
   el('auth-yt-btn').className='auth-btn auth-yt authed';
@@ -574,6 +580,14 @@ function onYoutubeAuthed(){
   el('auth-yt-btn').onclick=null;
   el('logout-yt-btn').className='logout-btn visible';
   updateSendUI();
+  // Fetch Google display name
+  fetch('https://www.googleapis.com/oauth2/v3/userinfo',{headers:{Authorization:'Bearer '+ytToken}})
+    .then(r=>r.json()).then(d=>{
+      if(d.name||d.email){
+        el('yt-username').textContent=d.name||d.email;
+        el('yt-username').className='auth-username visible';
+      }
+    }).catch(()=>{});
 }
 
 // ═══════ DELETE ═══════
@@ -1701,6 +1715,7 @@ function logoutTwitch(){
   el('auth-tw-btn').textContent='Login with Twitch';
   el('auth-tw-btn').onclick=loginTwitch;
   el('logout-tw-btn').className='logout-btn';
+  el('tw-username').className='auth-username';
   updateSendUI();
 }
 function logoutYoutube(){
@@ -1710,6 +1725,7 @@ function logoutYoutube(){
   el('auth-yt-btn').textContent='Login with Google';
   el('auth-yt-btn').onclick=loginYoutube;
   el('logout-yt-btn').className='logout-btn';
+  el('yt-username').className='auth-username';
   updateSendUI();
 }
 
