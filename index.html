@@ -663,7 +663,7 @@ function onInputKey(e){
     if(e.key==='Tab'||e.key==='Enter'){
       e.preventDefault();
       const sel=ac.querySelector('.ac-item.selected')||ac.querySelector('.ac-item');
-      if(sel){sel.click();return;}
+      if(sel){ const name=sel.querySelector('.ac-name')?.textContent; if(name) commitAc(name); return; }
     }
     if(e.key==='Escape'){closeAc();return;}
   }
