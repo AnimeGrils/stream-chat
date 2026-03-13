@@ -490,7 +490,7 @@ function syncDelete(id){
 function loginTwitch(){
   sessionStorage.setItem('oauth_pending','twitch');
   const redir=encodeURIComponent(origin());
-  const scopes='moderator:manage:chat_messages user:write:chat moderator:manage:banned_users moderator:manage:warnings moderator:read:followers user:read:subscriptions';
+  const scopes='moderator:manage:chat_messages user:write:chat moderator:manage:banned_users moderator:manage:warnings moderator:read:followers channel:read:subscriptions';
   window.location.href=`https://id.twitch.tv/oauth2/authorize?client_id=${cfg.twCid}&redirect_uri=${redir}&response_type=token&scope=${encodeURIComponent(scopes)}`;
 }
 async function onTwitchAuthed(){
@@ -1220,8 +1220,9 @@ async function modalConfirm(){
       // Also hide all their messages from streamer view
       messages.filter(m=>m.platform==='twitch'&&m.author===modalAction.username).forEach(m=>syncDelete(m.id));
     }
+    const _refreshName = modalAction.username;
     closeModal();
-    refreshModButtons(modalAction.username);
+    refreshModButtons(_refreshName);
   }catch(e){
     flashErr('Action failed: '+e.message);
     btn.disabled=false;
@@ -1266,7 +1267,7 @@ async function fetchTwitchProfile(msg) {
       twFetch(`https://api.twitch.tv/helix/users?login=${encodeURIComponent(msg.author)}`),
       twBroadcasterId ? twFetch(`https://api.twitch.tv/helix/channels/followers?broadcaster_id=${twBroadcasterId}&user_id=${msg.authorId||''}`) : Promise.resolve(null),
       twBroadcasterId && msg.authorId ? twFetch(`https://api.twitch.tv/helix/subscriptions/user?broadcaster_id=${twBroadcasterId}&user_id=${msg.authorId}`).catch(()=>null) : Promise.resolve(null),
-      twBroadcasterId && msg.authorId ? twFetch(`https://api.twitch.tv/helix/moderation/bans?broadcaster_id=${twBroadcasterId}&user_id=${msg.authorId}`).catch(()=>null) : Promise.resolve(null)
+      twBroadcasterId && msg.authorId ? twFetch(`https://api.twitch.tv/helix/moderation/bans?broadcaster_id=${twBroadcasterId}&user_id=${msg.authorId}`).catch(()=>({data:[]})) : Promise.resolve({data:[]})
     ]);
     const user = userRes.status==='fulfilled' ? userRes.value?.data?.[0] : null;
     const followData = followRes.status==='fulfilled' ? followRes.value : null;
