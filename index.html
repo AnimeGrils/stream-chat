@@ -91,6 +91,17 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
 .msg:hover .msg-actions{opacity:1}
 .msg.msg-deleted{opacity:.45}
 .msg.msg-deleted .msg-text{text-decoration:line-through}
+.msg-reply-bar{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);opacity:.75;padding:1px 0 1px 2px;cursor:pointer;white-space:nowrap;overflow:hidden;max-width:100%;line-height:1.4}
+.msg-reply-bar:hover{opacity:1;color:var(--text)}
+.msg-reply-bar::before{content:'↵';font-size:12px;flex-shrink:0;margin-right:1px}
+.msg-reply-author{font-weight:600;flex-shrink:0}
+.msg-reply-text{overflow:hidden;text-overflow:ellipsis;min-width:0}
+.msg.reply-highlight{animation:replyflash .9s ease-out}
+@keyframes replyflash{0%,30%{background:rgba(145,70,255,.28)}100%{background:transparent}}
+.reply-indicator{display:flex;align-items:center;gap:5px;padding:2px 14px 0;font-size:11px;color:var(--twitch);background:rgba(145,70,255,.07);border-left:2px solid var(--twitch)}
+.reply-indicator span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted)}
+.reply-cancel{background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;padding:0 2px;line-height:1}
+.reply-cancel:hover{color:var(--del)}
 .ctx-menu{position:fixed;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:4px 0;z-index:900;min-width:200px;box-shadow:0 4px 16px rgba(0,0,0,.4)}
 .ctx-item{padding:7px 14px;font-size:12px;cursor:pointer;color:var(--text);transition:background .1s}
 .ctx-item:hover{background:var(--surface2)}
@@ -313,6 +324,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
       <div class="emote-grid" id="emoteGrid"><div class="emote-loading">Loading emotes…</div></div>
     </div>
     <div class="ac-dropdown" id="acDropdown"></div>
+    <div id="replyIndicator" style="display:none" class="reply-indicator"><span id="replyIndicatorText"></span><button class="reply-cancel" onclick="cancelReply()" title="Cancel reply">✕</button></div>
     <div class="chat-input-bar">
       <div class="platform-toggle" id="platToggle">
         <button class="pt-btn tw-active" id="pt-tw" onclick="setPlatform('twitch')">TW</button>
@@ -388,6 +400,7 @@ const msgMap=new Map(); // id -> msg object for profile lookup
 const sessionActions={}; // userId -> {timeouts:n, bans:n}
 let ytChatId=null, ytNextPage=null;
 let sendPlatform='twitch';
+let replyToMsg=null; // message being replied to
 
 // Emote storage
 // twitchEmotes: Map<name, {id, url}>
@@ -617,9 +630,9 @@ async function sendTwitch(text){
     const r=await fetch('https://api.twitch.tv/helix/chat/messages',{
       method:'POST',
       headers:{'Authorization':`Bearer ${twToken}`,'Client-Id':cfg.twCid,'Content-Type':'application/json'},
-      body:JSON.stringify({broadcaster_id:twBroadcasterId,sender_id:twUserId,message:text})
+      body:JSON.stringify({broadcaster_id:twBroadcasterId,sender_id:twUserId,message:text,...(replyToMsg&&replyToMsg.platform==='twitch'?{reply_parent_message_id:replyToMsg.id}:{})})
     });
-    if(r.ok){ el('chatInput').value=''; }
+    if(r.ok){ el('chatInput').value=''; cancelReply(); }
     else{ const j=await r.json().catch(()=>({})); flashErr('Send failed: '+(j.message||r.status)); }
   }catch(e){flashErr('Send error: '+e.message);}
   btn.textContent='Send'; updateSendUI();
@@ -886,8 +899,11 @@ function parseTwitchMsg(line){
   const nick=(line.match(/:(\w+)!/)||[])[1]||'anon';
   const id=tags['id']||('tw-'+Date.now()+Math.random().toString(36).slice(2));
   if(twDisplayName&&(tags['display-name']||nick).toLowerCase()===twDisplayName.toLowerCase()) ownMessageIds.add(id);
+  const replyParentId=tags['reply-parent-msg-id']||null;
+  const replyParentUser=tags['reply-parent-user-login']||tags['reply-parent-display-name']||null;
+  const replyParentText=tags['reply-parent-msg-body']||null;
   addMsg({id,platform:'twitch',author:tags['display-name']||nick,
-    text:match[1],emotesTag:tags['emotes']||'',authorId:tags['user-id']||null,badgesTag:tags['badges']||'',badgeInfoTag:tags['badge-info']||'',
+    text:match[1],emotesTag:tags['emotes']||'',authorId:tags['user-id']||null,badgesTag:tags['badges']||'',badgeInfoTag:tags['badge-info']||'',replyParentId,replyParentUser,replyParentText,
     color:tags['color']||rndColor(nick),ts:Date.now()});
 }
 function parseClearMsg(line){const id=parseTags(line)['target-msg-id'];if(id)syncDelete(id);}
@@ -1030,9 +1046,10 @@ function buildMsg(msg){
   const isMod=mode==='mod';
   const renderedText=renderMsgText(msg.text,msg.emotesTag||'');
   const badgesHtml = buildBadgeImgs(msg);
+  const replyBar = msg.replyParentId ? `<div class="msg-reply-bar" data-scrollto="${esc(msg.replyParentId)}"><span class="msg-reply-author">@${esc(msg.replyParentUser||'?')}</span><span class="msg-reply-text">${esc((msg.replyParentText||'').replace(/\\\\s/g,' ').slice(0,80))}</span></div>` : '';
   div.innerHTML=
     `<span class="msg-time">${time}</span>`+
-    `<div class="msg-body">${badgesHtml}<span class="msg-author" style="color:${msg.color}" data-msgid="${esc(msg.id)}">${esc(msg.author)}</span><span class="msg-sep">:</span><span class="msg-text">${renderedText}</span></div>`+
+    `<div class="msg-body">${replyBar}${badgesHtml}<span class="msg-author" style="color:${msg.color}" data-msgid="${esc(msg.id)}">${esc(msg.author)}</span><span class="msg-sep">:</span><span class="msg-text">${renderedText}</span></div>`+
     (isMod ? buildModActions(msg, isDel) : '');
   return div;
 }
@@ -1266,8 +1283,8 @@ async function fetchTwitchProfile(msg) {
     const [userRes, followRes, subRes, banRes] = await Promise.allSettled([
       twFetch(`https://api.twitch.tv/helix/users?login=${encodeURIComponent(msg.author)}`),
       twBroadcasterId ? twFetch(`https://api.twitch.tv/helix/channels/followers?broadcaster_id=${twBroadcasterId}&user_id=${msg.authorId||''}`) : Promise.resolve(null),
-      twBroadcasterId && msg.authorId ? twFetch(`https://api.twitch.tv/helix/subscriptions/user?broadcaster_id=${twBroadcasterId}&user_id=${msg.authorId}`).catch(()=>null) : Promise.resolve(null),
-      twBroadcasterId && msg.authorId ? twFetch(`https://api.twitch.tv/helix/moderation/bans?broadcaster_id=${twBroadcasterId}&user_id=${msg.authorId}`).catch(()=>({data:[]})) : Promise.resolve({data:[]})
+      (twBroadcasterId && msg.authorId && twUserId===twBroadcasterId) ? twFetch(`https://api.twitch.tv/helix/subscriptions/user?broadcaster_id=${twBroadcasterId}&user_id=${msg.authorId}`).catch(()=>null) : Promise.resolve(null),
+      (twBroadcasterId && msg.authorId && twUserId===twBroadcasterId) ? twFetch(`https://api.twitch.tv/helix/moderation/bans?broadcaster_id=${twBroadcasterId}&user_id=${msg.authorId}`).catch(()=>({data:[]})) : Promise.resolve({data:[]})
     ]);
     const user = userRes.status==='fulfilled' ? userRes.value?.data?.[0] : null;
     const followData = followRes.status==='fulfilled' ? followRes.value : null;
@@ -1404,6 +1421,12 @@ async function unbanTwitchUser(userId, username) {
 
 // Author click via event delegation (avoids inline onclick issues)
 el('chatArea').addEventListener('click', e => {
+  const replyBar = e.target.closest('.msg-reply-bar');
+  if(replyBar){
+    const targetId = replyBar.dataset.scrollto;
+    if(targetId) scrollToMsg(targetId);
+    return;
+  }
   const author = e.target.closest('.msg-author');
   if (author) {
     const id = author.dataset.msgid;
@@ -1490,6 +1513,48 @@ async function ytBanUser(channelId, durationSeconds){
 el('modalOverlay').addEventListener('click',e=>{if(e.target===el('modalOverlay'))closeModal();});
 
 
+
+// ═══════ REPLY ═══════
+function startReply(msg){
+  replyToMsg = msg;
+  const preview = msg.text.length>50 ? msg.text.slice(0,50)+'…' : msg.text;
+  el('replyIndicatorText').textContent = 'Replying to @'+msg.author+': '+preview;
+  el('replyIndicator').style.display = 'flex';
+  // Switch platform to match the message being replied to
+  if(msg.platform==='youtube' && sendPlatform!=='youtube') setPlatform('youtube');
+  if(msg.platform==='twitch' && sendPlatform!=='twitch') setPlatform('twitch');
+  // For YouTube, pre-fill @username if input is empty
+  if(msg.platform==='youtube'){
+    const inp=el('chatInput');
+    if(!inp.value.trim()) inp.value='@'+msg.author+' ';
+    const len=inp.value.length;
+    inp.setSelectionRange(len,len);
+  }
+  el('chatInput').focus();
+}
+
+function cancelReply(){
+  // If the input still just has the auto-filled @mention, clear it
+  if(replyToMsg && replyToMsg.platform==='youtube'){
+    const inp=el('chatInput');
+    const prefill='@'+replyToMsg.author+' ';
+    if(inp.value===prefill) inp.value='';
+  }
+  replyToMsg = null;
+  el('replyIndicator').style.display = 'none';
+}
+
+function scrollToMsg(id){
+  const area = document.getElementById('chatArea');
+  const node = area.querySelector(`.msg[data-id="${CSS.escape(id)}"]`);
+  if(!node) return;
+  node.scrollIntoView({behavior:'smooth', block:'center'});
+  node.classList.remove('reply-highlight');
+  void node.offsetWidth; // force reflow to restart animation
+  node.classList.add('reply-highlight');
+  setTimeout(()=>node.classList.remove('reply-highlight'), 1000);
+}
+
 // ═══════ CONTEXT MENU ═══════
 let ctxTarget = null;
 
@@ -1512,6 +1577,8 @@ function showCtxMenu(x, y, msg){
   menu.innerHTML = `
     <div class="ctx-preview">${esc(preview)}</div>
     <div class="ctx-sep"></div>
+    <div class="ctx-item" data-action="reply">Reply</div>
+    <div class="ctx-sep"></div>
     ${!isDel ? '<div class="ctx-item danger" data-action="delete">Delete message</div>' : '<div class="ctx-item" style="opacity:.4;cursor:default">Already deleted</div>'}
     <div class="ctx-sep"></div>
     <div class="ctx-item" data-action="profile">View profile</div>
@@ -1528,6 +1595,7 @@ el('ctxMenu').addEventListener('click', e => {
   if(!item || !ctxTarget) return;
   e.stopPropagation();
   const action = item.dataset.action;
+  if(action === 'reply'){ startReply(ctxTarget); }
   if(action === 'delete'){ handleDelete(ctxTarget.id, ctxTarget.platform, null); }
   if(action === 'profile'){ openProfile(ctxTarget.id); }
   closeCtx();
