@@ -1009,7 +1009,19 @@ function renderMessages(){
   });
   const atBottom=area.scrollHeight-area.scrollTop-area.clientHeight<80;
   let added=false;
-  toShow.forEach(msg=>{if(rendered.has(msg.id))return;area.appendChild(buildMsg(msg));added=true;});
+  toShow.forEach(msg=>{
+    if(rendered.has(msg.id)){
+      // Refresh action buttons in mod view so timeout/ban state stays current
+      if(mode==='mod'){
+        const node=rendered.get(msg.id);
+        const actions=node.querySelector('.msg-actions');
+        if(actions) actions.outerHTML=buildModActions(msg,deletedIds.has(msg.id));
+      }
+      return;
+    }
+    area.appendChild(buildMsg(msg));
+    added=true;
+  });
   if(added&&atBottom) area.scrollTop=area.scrollHeight;
 }
 
@@ -1484,30 +1496,33 @@ function showCtxMenu(x, y, msg){
   menu.innerHTML = `
     <div class="ctx-preview">${esc(preview)}</div>
     <div class="ctx-sep"></div>
-    ${!isDel ? `<div class="ctx-item danger" onclick="ctxDelete()">Delete message</div>` : '<div class="ctx-item" style="opacity:.4;cursor:default">Already deleted</div>'}
+    ${!isDel ? '<div class="ctx-item danger" data-action="delete">Delete message</div>' : '<div class="ctx-item" style="opacity:.4;cursor:default">Already deleted</div>'}
     <div class="ctx-sep"></div>
-    <div class="ctx-item" onclick="openProfile('${esc(msg.id)}');closeCtx()">View profile</div>
+    <div class="ctx-item" data-action="profile">View profile</div>
   `;
   menu.style.display = 'block';
-  // Keep menu inside viewport
   const vw = window.innerWidth, vh = window.innerHeight;
   const mw = 220, mh = 120;
   menu.style.left = (x + mw > vw ? vw - mw - 8 : x) + 'px';
   menu.style.top  = (y + mh > vh ? vh - mh - 8 : y) + 'px';
 }
 
-function ctxDelete(){
-  if(!ctxTarget) return;
-  handleDelete(ctxTarget.id, ctxTarget.platform, null);
+el('ctxMenu').addEventListener('click', e => {
+  const item = e.target.closest('[data-action]');
+  if(!item || !ctxTarget) return;
+  e.stopPropagation();
+  const action = item.dataset.action;
+  if(action === 'delete'){ handleDelete(ctxTarget.id, ctxTarget.platform, null); }
+  if(action === 'profile'){ openProfile(ctxTarget.id); }
   closeCtx();
-}
+});
 
 function closeCtx(){
   el('ctxMenu').style.display = 'none';
   ctxTarget = null;
 }
 
-document.addEventListener('click', () => closeCtx());
+document.addEventListener('click', e => { if(!el('ctxMenu').contains(e.target)) closeCtx(); });
 document.addEventListener('keydown', e => { if(e.key==='Escape') closeCtx(); });
 
 function renderLoop(){renderMessages();requestAnimationFrame(renderLoop);}
@@ -1537,7 +1552,7 @@ function el(id){return document.getElementById(id);}
 function cls(id,c){el(id).className=c;}
 function showBanner(id){el(id).style.display='flex';}
 function dot(id,s){const e=el(id);if(!e)return;e.className='dc'+(s==='ok'?' ok':s==='spin'?' spin':s==='err'?' err':'');}
-function setBtn(btn,c,text){btn.className='mod-btn del'+(c?' '+c:'');btn.textContent=text;btn.disabled=c==='pending';}
+function setBtn(btn,c,text){if(!btn)return;btn.className='mod-btn del'+(c?' '+c:'');btn.textContent=text;btn.disabled=c==='pending';}
 let errTimer=null;
 function flashSuccess(msg){const b=el('bn-err');b.style.color='var(--green)';b.textContent='✓ '+msg;b.style.display='flex';clearTimeout(errTimer);errTimer=setTimeout(()=>{b.style.display='none';b.style.color='';},3000);}
 function flashErr(msg){const b=el('bn-err');b.textContent='⚠ '+msg;b.style.display='flex';clearTimeout(errTimer);errTimer=setTimeout(()=>{b.style.display='none';},5000);}
