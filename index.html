@@ -1186,6 +1186,8 @@ function formatDuration(s){
 function closeModal(){
   el('modalOverlay').classList.remove('open');
   modalAction=null;
+  const btn=el('modalConfirmBtn');
+  if(btn){btn.disabled=false;}
 }
 
 async function modalConfirm(){
