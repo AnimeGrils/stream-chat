@@ -96,7 +96,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
 .msg:hover .msg-actions{opacity:1}
 .msg.msg-deleted{opacity:.45}
 .msg.msg-deleted .msg-text{text-decoration:line-through}
-.msg.msg-ping{background:rgba(255,170,68,.20)}
+.msg.msg-ping{background:rgba(255,170,68,.22)}
+.msg-text a.chat-link{color:var(--twitch);text-decoration:underline;text-underline-offset:2px;word-break:break-all}
+.msg-text a.chat-link:hover{color:var(--text)}
+.msg.yt .msg-text a.chat-link{color:var(--youtube)}
 .msg-reply-bar{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);opacity:.75;padding:1px 0 1px 2px;cursor:pointer;white-space:nowrap;overflow:hidden;max-width:100%;line-height:1.4}
 .msg-reply-bar:hover{opacity:1;color:var(--text)}
 .msg-reply-bar::before{content:'↵';font-size:12px;flex-shrink:0;margin-right:1px}
@@ -556,7 +559,7 @@ function loginTwitch(){
   sessionStorage.setItem('oauth_pending','twitch');
   const redir=encodeURIComponent(origin());
   const scopes='moderator:manage:chat_messages user:write:chat moderator:manage:banned_users moderator:manage:warnings moderator:read:followers channel:read:subscriptions';
-  window.location.href=`https://id.twitch.tv/oauth2/authorize?client_id=${cfg.twCid}&redirect_uri=${redir}&response_type=token&force_verify=true&scope=${encodeURIComponent(scopes)}`;
+  window.location.href=`https://id.twitch.tv/oauth2/authorize?client_id=${encodeURIComponent(cfg.twCid)}&redirect_uri=${redir}&response_type=token&force_verify=true&scope=${encodeURIComponent(scopes)}`;
 }
 async function onTwitchAuthed(){
   el('auth-tw-btn').className='auth-btn auth-tw authed';
@@ -592,7 +595,7 @@ function loginYoutube(){
   sessionStorage.removeItem('yt_token');
   sessionStorage.setItem('oauth_pending','youtube');
   const scope=encodeURIComponent('https://www.googleapis.com/auth/youtube.force-ssl');
-  window.location.href=`https://accounts.google.com/o/oauth2/v2/auth?client_id=${cfg.ytCid}&redirect_uri=${encodeURIComponent(origin())}&response_type=token&prompt=select_account&scope=${scope}`;
+  window.location.href=`https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(cfg.ytCid)}&redirect_uri=${encodeURIComponent(origin())}&response_type=token&prompt=select_account&scope=${scope}`;
 }
 function onYoutubeAuthed(){
   el('auth-yt-btn').className='auth-btn auth-yt authed';
@@ -780,7 +783,7 @@ function buildBadgeImgs(msg) {
   const imgs = msg.badgesTag.split(',').map(b => {
     const [setId, versionId] = b.split('/');
     const url = resolveBadge(setId, versionId);
-    return url ? `<img class="msg-badge" src="${url}" alt="${esc(setId)}" title="${esc(setId)}">` : '';
+    return url ? `<img class="msg-badge" src="${safeUrl(url)}" alt="${esc(setId)}" title="${esc(setId)}">` : '';
   }).join('');
   return `<span class="msg-badges">${imgs}</span>`;
 }
@@ -867,7 +870,7 @@ function renderEmoteGrid(){
     const div=document.createElement('div');
     div.className='ep-item';
     div.title=e.name+' ('+e.source+')';
-    div.innerHTML=`<img src="${e.url}" alt="${esc(e.name)}" loading="lazy"><span class="ep-tip">${esc(e.name)}</span>`;
+    div.innerHTML=`<img src="${safeUrl(e.url)}" alt="${esc(e.name)}" loading="lazy"><span class="ep-tip">${esc(e.name)}</span>`;
     div.onmousedown=(ev)=>{ev.preventDefault();insertEmote(e.name);};
     grid.appendChild(div);
   });
@@ -904,7 +907,7 @@ function showAc(query){
     const div = document.createElement('div');
     div.className = 'ac-item';
     div.dataset.idx = i;
-    div.innerHTML = `<img src="${e.url}" alt="${esc(e.name)}"><span class="ac-name">${esc(e.name)}</span><span class="ac-src">${e.source}</span>`;
+    div.innerHTML = `<img src="${safeUrl(e.url)}" alt="${esc(e.name)}"><span class="ac-name">${esc(e.name)}</span><span class="ac-src">${e.source}</span>`;
     div.onmousedown = (ev) => { ev.preventDefault(); commitAc(e.name); };
     ac.appendChild(div);
   });
@@ -1130,8 +1133,8 @@ function renderMsgText(text, emotesTag){
   });
 
   return final.map(seg=>{
-    if(seg.type==='text') return esc(seg.value);
-    return `<img class="emote" src="${seg.url}" alt="${esc(seg.name)}" title="${esc(seg.name)}">`;
+    if(seg.type!=='text') return `<img class="emote" src="${safeUrl(seg.url)}" alt="${esc(seg.name)}" title="${esc(seg.name)}">`;
+    return linkify(seg.value);
   }).join('');
 }
 
@@ -1326,7 +1329,7 @@ async function modalConfirm(){
   try{
     if(modalAction.type==='yt-timeout'){
       const raw=el('toInput')?.value||'';
-      const dur=parseDuration(raw)||window._toSnaps[window._toSnapIdx||4]||300;
+      const dur=Math.max(1,Math.min(86400,parseDuration(raw)||window._toSnaps[window._toSnapIdx||4]||300));
       await ytBanUser(modalAction.channelId, dur);
       flashSuccess('Timed out '+modalAction.username+' for '+formatDuration(dur));
       if(modalAction.channelId){if(!sessionActions[modalAction.channelId])sessionActions[modalAction.channelId]={timeouts:0,bans:0};sessionActions[modalAction.channelId].timeouts++;}
@@ -1352,7 +1355,7 @@ async function modalConfirm(){
       if(modalAction.type==='timeout'){
         const raw=el('toInput')?.value||'';
         const parsed=parseDuration(raw);
-        body.duration=parsed||window._toSnaps[window._toSnapIdx||4]||600;
+        body.duration=Math.max(1,Math.min(1209600,parsed||window._toSnaps[window._toSnapIdx||4]||600));
       }
       await twFetch(`https://api.twitch.tv/helix/moderation/bans?broadcaster_id=${twBroadcasterId}&moderator_id=${twUserId}`,{
         method:'POST',headers:{'Content-Type':'application/json'},
@@ -1446,7 +1449,7 @@ async function fetchTwitchProfile(msg) {
 
     el('ppHeader').innerHTML = `
       <button class="pp-close" onclick="closeProfile()">✕</button>
-      <img class="pp-avatar" src="${user.profile_image_url}" alt="${esc(user.display_name)}">
+      <img class="pp-avatar" src="${/^https:\/\//.test(user.profile_image_url)?user.profile_image_url:''}" alt="${esc(user.display_name)}">
       <div class="pp-info">
         <div class="pp-name">${esc(user.display_name)}<span class="pp-platform tw">TW</span></div>
         <div class="pp-tags">
@@ -1802,6 +1805,24 @@ let errTimer=null;
 function flashSuccess(msg){const b=el('bn-err');b.style.color='var(--green)';b.textContent='✓ '+msg;b.style.display='flex';clearTimeout(errTimer);errTimer=setTimeout(()=>{b.style.display='none';b.style.color='';},3000);}
 function flashErr(msg){const b=el('bn-err');b.textContent='⚠ '+msg;b.style.display='flex';clearTimeout(errTimer);errTimer=setTimeout(()=>{b.style.display='none';},5000);}
 function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function safeUrl(u){return(typeof u==='string'&&/^https:\/\//.test(u))?u:'';}
+function linkify(text){
+  // Split on URLs, alternating plain/url segments
+  const URL_RE=/https?:\/\/[^\s<>"']+|www\.[a-zA-Z0-9\-]+\.[a-zA-Z]{2,}[^\s<>"']*/gi;
+  const parts=[];
+  let last=0, m;
+  while((m=URL_RE.exec(text))!==null){
+    if(m.index>last) parts.push({t:'text',v:text.slice(last,m.index)});
+    const raw=m[0];
+    const href=raw.startsWith('http')?raw:'https://'+raw;
+    // Only allow http/https
+    if(/^https?:\/\//i.test(href)) parts.push({t:'link',raw,href});
+    else parts.push({t:'text',v:raw});
+    last=m.index+raw.length;
+  }
+  if(last<text.length) parts.push({t:'text',v:text.slice(last)});
+  return parts.map(p=>p.t==='text'?esc(p.v):`<a class="chat-link" href="${esc(p.href)}" target="_blank" rel="noopener noreferrer">${esc(p.raw)}</a>`).join('');
+}
 const _cc={};
 function rndColor(name){
   if(_cc[name])return _cc[name];
