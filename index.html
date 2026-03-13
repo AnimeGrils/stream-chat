@@ -96,6 +96,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
 .msg:hover .msg-actions{opacity:1}
 .msg.msg-deleted{opacity:.45}
 .msg.msg-deleted .msg-text{text-decoration:line-through}
+.msg.msg-ping{background:rgba(255,170,68,.08)}
 .msg-reply-bar{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);opacity:.75;padding:1px 0 1px 2px;cursor:pointer;white-space:nowrap;overflow:hidden;max-width:100%;line-height:1.4}
 .msg-reply-bar:hover{opacity:1;color:var(--text)}
 .msg-reply-bar::before{content:'↵';font-size:12px;flex-shrink:0;margin-right:1px}
@@ -440,6 +441,7 @@ let twToken=null, twUserId=null, twBroadcasterId=null, twDisplayName=null, ytTok
 const timedOutUsers={}; // username.lower -> {until: ms, duration: s}
 const bannedUsers=new Set(); // username.lower
 let ownMessageIds=new Set();
+let pingMessageIds=new Set(); // mod pings to streamer — bypass delay + highlight
 const msgMap=new Map(); // id -> msg object for profile lookup
 const sessionActions={}; // userId -> {timeouts:n, bans:n}
 let ytChatId=null, ytNextPage=null;
@@ -982,6 +984,10 @@ function parseTwitchMsg(line){
   const nick=(line.match(/:(\w+)!/)||[])[1]||'anon';
   const id=tags['id']||('tw-'+Date.now()+Math.random().toString(36).slice(2));
   if(twDisplayName&&(tags['display-name']||nick).toLowerCase()===twDisplayName.toLowerCase()) ownMessageIds.add(id);
+  const senderBadges=tags['badges']||'';
+  const isSenderMod=senderBadges.includes('moderator')||senderBadges.includes('broadcaster');
+  const pingPattern=twDisplayName?new RegExp('@'+twDisplayName.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i'):null;
+  if(isSenderMod&&pingPattern&&pingPattern.test(match[1])) pingMessageIds.add(id);
   const replyParentId=tags['reply-parent-msg-id']||null;
   const replyParentUser=tags['reply-parent-user-login']||tags['reply-parent-display-name']||null;
   const replyParentText=tags['reply-parent-msg-body']||null;
@@ -1061,7 +1067,11 @@ async function pollYoutube(){
     const d=await(await fetch(url)).json();
     (d.items||[]).forEach(item=>{
       if(item.snippet.type!=='textMessageEvent') return;
-      addMsg({id:item.id,platform:'youtube',author:item.authorDetails.displayName,
+      const ytIsMod=item.authorDetails.isChatModerator||item.authorDetails.isChatOwner;
+  const ytText=item.snippet.displayMessage||'';
+  const ytPingPattern=twDisplayName?new RegExp('@'+twDisplayName.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i'):null;
+  if(ytIsMod&&ytPingPattern&&ytPingPattern.test(ytText)) pingMessageIds.add(item.id);
+  addMsg({id:item.id,platform:'youtube',author:item.authorDetails.displayName,
         text:item.snippet.textMessageDetails?.messageText||'',emotesTag:'',authorId:item.authorDetails.channelId||null,color:'#ff5555',ts:Date.now()});
     });
     ytNextPage=d.nextPageToken;
@@ -1129,7 +1139,7 @@ function renderMsgText(text, emotesTag){
 function renderMessages(){
   const area=document.getElementById('chatArea');
   const now=Date.now(),s=mode==='streamer';
-  const toShow=s?messages.filter(m=>!deletedIds.has(m.id)&&(ownMessageIds.has(m.id)||now-m.ts>=DELAY)):messages.filter(m=>!deletedIds.has(m.id)||mode==='mod');
+  const toShow=s?messages.filter(m=>!deletedIds.has(m.id)&&(ownMessageIds.has(m.id)||pingMessageIds.has(m.id)||now-m.ts>=DELAY)):messages.filter(m=>!deletedIds.has(m.id)||mode==='mod');
   el('cnt-vis').textContent=toShow.filter(m=>!deletedIds.has(m.id)).length;
   el('cnt-del').textContent=deletedIds.size;
   el('emptyState').style.display=toShow.length===0?'flex':'none';
@@ -1154,7 +1164,8 @@ function renderMessages(){
 
 function buildMsg(msg){
   const div=document.createElement('div');
-  div.className='msg '+(msg.platform==='twitch'?'tw':'yt');
+  const isPing=pingMessageIds.has(msg.id);
+  div.className='msg '+(msg.platform==='twitch'?'tw':'yt')+(isPing?' msg-ping':'');
   div.dataset.id=msg.id;
   const t=new Date(msg.ts);
   const time=t.getHours().toString().padStart(2,'0')+':'+t.getMinutes().toString().padStart(2,'0');
