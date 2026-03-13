@@ -188,9 +188,13 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
 .pt-btn{padding:4px 8px;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer;border:none;background:transparent;color:var(--muted);font-family:var(--font);transition:all .12s}
 .pt-btn.tw-active{background:var(--twitch);color:#fff}
 .pt-btn.yt-active{background:var(--youtube-dim);color:var(--youtube)}
-.chat-input{flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;color:var(--text);font-family:var(--mono);font-size:13px;outline:none;transition:border-color .15s;resize:none;height:36px;line-height:20px}
+.chat-input-outer{flex:1;position:relative;min-width:0}
+.chat-input{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:6px 12px;color:var(--text);font-family:var(--mono);font-size:13px;outline:none;transition:border-color .15s;height:36px;box-sizing:border-box;caret-color:var(--text)}
 .chat-input:focus{border-color:var(--twitch)}
-.chat-input::placeholder{color:var(--muted)}
+.chat-input-preview{position:absolute;inset:0;padding:6px 12px;font-family:var(--mono);font-size:13px;line-height:1.5;pointer-events:none;overflow:hidden;white-space:nowrap;display:flex;align-items:center;gap:0;border-radius:8px}
+.chat-input-preview .prev-text{color:transparent}
+.chat-input-preview img.inline-emote{height:18px;width:auto;vertical-align:middle;display:inline-block;flex-shrink:0}
+.chat-input.has-emote{color:transparent;caret-color:var(--text)}
 .emote-toggle-btn{background:var(--surface2);border:1px solid var(--border);border-radius:6px;width:34px;height:34px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;transition:all .12s;flex-shrink:0}
 .emote-toggle-btn:hover{background:var(--surface3);border-color:var(--muted)}
 .emote-toggle-btn.active{border-color:var(--twitch);background:rgba(145,70,255,.12)}
@@ -263,17 +267,17 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
   <p class="sub">Combined Twitch + YouTube chat for streamers and mods</p>
 
   <div class="sec"><span class="badge b-fb">Database</span></div>
-  <div class="field field-secret"><label>Database URL</label><input id="fbUrl" type="password" oninput="saveField(this)" placeholder="https://your-project-default-rtdb.firebaseio.com"><button type="button" class="eye-btn" onclick="toggleSecret('fbUrl')" title="Show/hide">👁</button></div>
-  <div class="field field-secret"><label>API Key</label><input id="fbKey" type="password" oninput="saveField(this)" placeholder="AIza..."><button type="button" class="eye-btn" onclick="toggleSecret('fbKey')" title="Show/hide">👁</button></div>
+  <div class="field field-secret"><label>Database URL</label><input id="fbUrl" type="password" oninput="saveField(this)" placeholder="https://your-project-default-rtdb.firebaseio.com"></div>
+  <div class="field field-secret"><label>API Key</label><input id="fbKey" type="password" oninput="saveField(this)" placeholder="AIza..."></div>
 
   <div class="sec"><span class="badge b-tw">Twitch</span></div>
   <div class="field"><label>Channel Name</label><input id="twChannel" oninput="saveField(this)" placeholder="channel_name"></div>
-  <div class="field field-secret"><label>Client ID</label><input id="twClientId" type="password" oninput="saveField(this)" placeholder="abc123..."><button type="button" class="eye-btn" onclick="toggleSecret('twClientId')" title="Show/hide">👁</button></div>
+  <div class="field field-secret"><label>Client ID</label><input id="twClientId" type="password" oninput="saveField(this)" placeholder="abc123..."></div>
 
   <div class="sec"><span class="badge b-yt">YouTube</span><span class="b-opt">optional</span></div>
-  <div class="field field-secret"><label>Data API Key</label><input id="ytApiKey" type="password" oninput="saveField(this)" placeholder="AIza..."><button type="button" class="eye-btn" onclick="toggleSecret('ytApiKey')" title="Show/hide">👁</button></div>
   <div class="field"><label>YouTube Channel</label><input id="ytVideoId" oninput="saveField(this)" placeholder="@channelname or channel ID"></div>
-  <div class="field field-secret"><label>OAuth Client ID</label><input id="ytClientId" type="password" oninput="saveField(this)" placeholder="123456-abc.apps.googleusercontent.com"><button type="button" class="eye-btn" onclick="toggleSecret('ytClientId')" title="Show/hide">👁</button></div>
+  <div class="field field-secret"><label>OAuth Client ID</label><input id="ytClientId" type="password" oninput="saveField(this)" placeholder="123456-abc.apps.googleusercontent.com"></div>
+  <div class="field field-secret"><label>Data API Key</label><input id="ytApiKey" type="password" oninput="saveField(this)" placeholder="AIza..."></div>
 
   <div class="btn-row">
     <button class="btn btn-str" onclick="launch('streamer')">Open as Streamer</button>
@@ -332,7 +336,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
         <button class="pt-btn tw-active" id="pt-tw" onclick="setPlatform('twitch')">TW</button>
         <button class="pt-btn" id="pt-yt" onclick="setPlatform('youtube')">YT</button>
       </div>
-      <div class="chat-input" id="chatInput" contenteditable="true" data-placeholder="Send a message…" onkeydown="onInputKey(event)" oninput="onChatInput(event)" spellcheck="true"></div>
+      <div class="chat-input-outer"><input class="chat-input" id="chatInput" placeholder="Send a message…" onkeydown="onInputKey(event)" oninput="onChatInput(event)" autocomplete="off" spellcheck="false"><div class="chat-input-preview" id="chatPreview" aria-hidden="true"></div></div>
       <button class="emote-toggle-btn" id="emoteToggleBtn" onclick="toggleEmotePicker()" title="Emotes">😊</button>
       <button class="send-btn" id="sendBtn" onclick="sendMessage()">Send</button>
     </div>
@@ -375,6 +379,34 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
 
 // ═══════ PERSIST SETUP FIELDS ═══════
 const SETUP_FIELDS = ['fbUrl','fbKey','twChannel','twClientId','delaySeconds','ytApiKey','ytVideoId','ytClientId'];
+
+function toggleSecret(btn){
+  const wrap = btn.closest('.field-secret');
+  const inp = wrap.querySelector('input');
+  const show = inp.type === 'password';
+  inp.type = show ? 'text' : 'password';
+  btn.classList.toggle('revealed', show);
+  // Update icon
+  btn.innerHTML = show
+    ? '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>'
+    : '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+}
+
+function initSecretFields(){
+  document.querySelectorAll('.field-secret').forEach(wrap=>{
+    const inp = wrap.querySelector('input');
+    if(!inp || wrap.querySelector('.eye-btn')) return;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'eye-btn';
+    btn.title = 'Show/hide';
+    btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+    btn.onclick = () => toggleSecret(btn);
+    wrap.appendChild(btn);
+  });
+}
+
+document.addEventListener('DOMContentLoaded', initSecretFields);
 
 function saveField(input){
   localStorage.setItem('sc_'+input.id, input.value);
@@ -577,126 +609,86 @@ async function handleDelete(id,platform,btn){
 }
 
 
-// ═══════ CONTENTEDITABLE HELPERS ═══════
-function getChatText(){
-  const el_=el('chatInput');
-  let text='';
-  el_.childNodes.forEach(n=>{
-    if(n.nodeType===Node.TEXT_NODE) text+=n.textContent;
-    else if(n.nodeName==='IMG') text+=(n.alt||'');
-    else if(n.nodeName==='BR') text+='\n';
-    else text+=n.textContent;
-  });
-  return text;
-}
-
+// ═══════ INPUT HELPERS ═══════
+function getChatText(){ return el('chatInput').value; }
 function setChatText(val){
-  const inp=el('chatInput');
-  inp.innerHTML='';
-  if(val) inp.appendChild(document.createTextNode(val));
+  el('chatInput').value=val;
+  updateChatPreview();
 }
-
-// Returns caret offset in plain-text terms
-function getCaretTextOffset(){
-  const inp=el('chatInput');
-  const sel=window.getSelection();
-  if(!sel||!sel.rangeCount) return 0;
-  const range=sel.getRangeAt(0);
-  const pre=range.cloneRange();
-  pre.selectNodeContents(inp);
-  pre.setEnd(range.endContainer,range.endOffset);
-  // walk pre to compute text offset
-  let offset=0;
-  const iter=document.createNodeIterator(pre.commonAncestorContainer,NodeFilter.SHOW_ALL);
-  let node;
-  while((node=iter.nextNode())){
-    if(!pre.commonAncestorContainer.contains(node)) break;
-    if(node===pre.endContainer){
-      if(node.nodeType===Node.TEXT_NODE) offset+=pre.endOffset;
-      break;
-    }
-    if(node.nodeType===Node.TEXT_NODE) offset+=node.textContent.length;
-    else if(node.nodeName==='IMG') offset+=(node.alt||'').length;
-  }
-  return offset;
-}
-
-function getCaretTextOffsetSimple(){
-  const inp=el('chatInput');
-  const sel=window.getSelection();
-  if(!sel||!sel.rangeCount||!inp.contains(sel.anchorNode)) return getChatText().length;
-  // Simple: count text before caret
-  const range=sel.getRangeAt(0).cloneRange();
-  range.setStart(inp,0);
-  let text='';
-  // Walk nodes up to caret
-  function walk(node){
-    if(node===sel.anchorNode){
-      if(node.nodeType===Node.TEXT_NODE) text+=node.textContent.slice(0,sel.anchorOffset);
-      return true;
-    }
-    if(node.nodeType===Node.TEXT_NODE){ text+=node.textContent; return false; }
-    if(node.nodeName==='IMG'){ text+=node.alt||''; return false; }
-    for(const child of node.childNodes){ if(walk(child)) return true; }
-    return false;
-  }
-  walk(inp);
-  return text.length;
-}
-
+function getCaretTextOffsetSimple(){ return el('chatInput').selectionStart||0; }
 function setCaretToEnd(){
   const inp=el('chatInput');
   inp.focus();
-  const sel=window.getSelection();
-  const range=document.createRange();
-  range.selectNodeContents(inp);
-  range.collapse(false);
-  sel.removeAllRanges();
-  sel.addRange(range);
+  const l=inp.value.length;
+  inp.setSelectionRange(l,l);
 }
 
-// Insert text or emote image at caret
-function insertAtCaret(name, url){
+// Insert emote name at caret position in the plain input
+function insertAtCaret(name){
   const inp=el('chatInput');
+  const start=inp.selectionStart;
+  const end=inp.selectionEnd;
+  const val=inp.value;
+  const space=(start>0&&val[start-1]!==' ')?' ':'';
+  const insert=space+name+' ';
+  inp.value=val.slice(0,start)+insert+val.slice(end);
+  const pos=start+insert.length;
   inp.focus();
-  const sel=window.getSelection();
-  if(sel&&sel.rangeCount){
-    const range=sel.getRangeAt(0);
-    range.deleteContents();
-    if(url){
-      // Insert emote image
+  inp.setSelectionRange(pos,pos);
+  updateChatPreview();
+}
+
+// Build the preview overlay: split value by emote names, render imgs for matches
+function updateChatPreview(){
+  const inp=el('chatInput');
+  const prev=el('chatPreview');
+  if(!prev) return;
+  const val=inp.value;
+  // Check if any emotes are present
+  let hasEmote=false;
+  const parts=tokeniseForPreview(val);
+  parts.forEach(p=>{ if(p.type==='emote') hasEmote=true; });
+  if(!hasEmote){
+    inp.classList.remove('has-emote');
+    prev.innerHTML='';
+    return;
+  }
+  inp.classList.add('has-emote');
+  prev.innerHTML='';
+  parts.forEach(p=>{
+    if(p.type==='text'){
+      const span=document.createElement('span');
+      span.className='prev-text';
+      span.textContent=p.value;
+      prev.appendChild(span);
+    } else {
       const img=document.createElement('img');
       img.className='inline-emote';
-      img.src=url; img.alt=name; img.title=name;
-      range.insertNode(img);
-      // Insert trailing space text node
-      const space=document.createTextNode(' ');
-      range.setStartAfter(img);
-      range.insertNode(space);
-      range.setStartAfter(space);
-      range.collapse(true);
-      sel.removeAllRanges();
-      sel.addRange(range);
-    } else {
-      const text=document.createTextNode(name);
-      range.insertNode(text);
-      range.setStartAfter(text);
-      range.collapse(true);
-      sel.removeAllRanges();
-      sel.addRange(range);
+      img.src=p.url; img.alt=p.name;
+      prev.appendChild(img);
+      // space after
+      const sp=document.createElement('span');
+      sp.className='prev-text'; sp.textContent=' ';
+      prev.appendChild(sp);
     }
-  } else {
-    // Fallback: append
-    if(url){
-      const img=document.createElement('img');
-      img.className='inline-emote'; img.src=url; img.alt=name; img.title=name;
-      inp.appendChild(img);
-      inp.appendChild(document.createTextNode(' '));
+  });
+}
+
+function tokeniseForPreview(val){
+  const words=val.split(/(\s+)/);
+  const out=[];
+  let buf='';
+  words.forEach(w=>{
+    const emote=allEmotes.find(e=>e.name===w);
+    if(emote){
+      if(buf){out.push({type:'text',value:buf});buf='';}
+      out.push({type:'emote',name:w,url:emote.url});
     } else {
-      inp.appendChild(document.createTextNode(name+' '));
+      buf+=w;
     }
-    setCaretToEnd();
-  }
+  });
+  if(buf) out.push({type:'text',value:buf});
+  return out;
 }
 
 // ═══════ SEND MESSAGE ═══════
@@ -759,7 +751,7 @@ async function sendTwitch(text){
       headers:{'Authorization':`Bearer ${twToken}`,'Client-Id':cfg.twCid,'Content-Type':'application/json'},
       body:JSON.stringify({broadcaster_id:twBroadcasterId,sender_id:twUserId,message:text,...(replyToMsg&&replyToMsg.platform==='twitch'?{reply_parent_message_id:replyToMsg.id}:{})})
     });
-    if(r.ok){ setChatText(''); cancelReply(); }
+    if(r.ok){ el('chatInput').value=''; updateChatPreview(); cancelReply(); }
     else{ const j=await r.json().catch(()=>({})); flashErr('Send failed: '+(j.message||r.status)); }
   }catch(e){flashErr('Send error: '+e.message);}
   btn.textContent='Send'; updateSendUI();
@@ -775,7 +767,7 @@ async function sendYoutube(text){
       headers:{'Authorization':`Bearer ${ytToken}`,'Content-Type':'application/json'},
       body:JSON.stringify({snippet:{liveChatId:ytChatId,type:'textMessageEvent',textMessageDetails:{messageText:text}}})
     });
-    if(r.ok){ setChatText(''); }
+    if(r.ok){ el('chatInput').value=''; updateChatPreview(); }
     else{ const j=await r.json().catch(()=>({})); flashErr('Send failed: '+(j.error?.message||r.status)); }
   }catch(e){flashErr('Send error: '+e.message);}
   btn.textContent='Send'; updateSendUI();
@@ -888,12 +880,13 @@ function filterEmotes(){ renderEmoteGrid(); }
 function renderEmoteGrid(){
   const grid=el('emoteGrid');
   const query=el('emoteSearch')?.value?.toLowerCase()||'';
-  const filtered=allEmotes.filter(e=>(sendPlatform==='youtube'?e.source==='7tv':true)&&(!query||e.name.toLowerCase().includes(query)));
+  const ytMode=sendPlatform==='youtube';
+  const filtered=allEmotes.filter(e=>(ytMode?e.source!=='tw':true)&&(!query||e.name.toLowerCase().includes(query)));
   if(!emotesLoaded&&filtered.length===0){
     grid.innerHTML='<div class="emote-loading">Loading emotes…</div>'; return;
   }
   if(filtered.length===0){
-    grid.innerHTML='<div class="emote-loading">No emotes found</div>'; return;
+    grid.innerHTML=`<div class="emote-loading">${ytMode&&!query?'No emotes — 7TV emotes load via your Twitch channel config':'No emotes found'}</div>`; return;
   }
   grid.innerHTML='';
   filtered.slice(0,300).forEach(e=>{
@@ -907,15 +900,15 @@ function renderEmoteGrid(){
 }
 
 function insertEmote(name){
-  const emote=allEmotes.find(e=>e.name===name);
-  const url=emote?emote.url:null;
-  insertAtCaret(name, url);
+  insertAtCaret(name);
+  closeEmotePicker();
 }
 
 // ═══════ AUTOCOMPLETE (:name) ═══════
 let acSelectedIndex = -1;
 
 function onChatInput(e){
+  updateChatPreview();
   const val = getChatText();
   const cursor = getCaretTextOffsetSimple();
   const textToCursor = val.slice(0, cursor);
@@ -930,7 +923,7 @@ function onChatInput(e){
 function showAc(query){
   const ac = el('acDropdown');
   const q = query.toLowerCase();
-  const matches = allEmotes.filter(e => (sendPlatform==='youtube'?e.source==='7tv':true) && e.name.toLowerCase().includes(q)).slice(0, 12);
+  const matches = allEmotes.filter(e => (sendPlatform==='youtube'?e.source!=='tw':true) && e.name.toLowerCase().includes(q)).slice(0, 12);
   if(matches.length === 0){ closeAc(); return; }
   acSelectedIndex = -1;
   ac.innerHTML = '';
@@ -1677,7 +1670,8 @@ function startReply(msg){
   if(msg.platform==='twitch' && sendPlatform!=='twitch') setPlatform('twitch');
   // For YouTube, pre-fill @username if input is empty
   if(msg.platform==='youtube'){
-    if(!getChatText().trim()) setChatText('@'+msg.author+' ');
+    const inp=el('chatInput');
+    if(!inp.value.trim()){ inp.value='@'+msg.author+' '; updateChatPreview(); }
     setCaretToEnd();
   }
   el('chatInput').focus();
@@ -1686,8 +1680,9 @@ function startReply(msg){
 function cancelReply(){
   // If the input still just has the auto-filled @mention, clear it
   if(replyToMsg && replyToMsg.platform==='youtube'){
+    const inp=el('chatInput');
     const prefill='@'+replyToMsg.author+' ';
-    if(getChatText()===prefill) setChatText('');
+    if(inp.value===prefill){ inp.value=''; updateChatPreview(); }
   }
   replyToMsg = null;
   el('replyIndicator').style.display = 'none';
