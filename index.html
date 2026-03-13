@@ -52,7 +52,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
 .dc.spin{background:var(--amber);animation:pulse 1s infinite}
 .dc.err{background:var(--del)}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
-.delay-badge{font-size:11px;color:var(--muted);background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:3px 8px;font-family:var(--mono)}
+.delay-badge{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:2px 4px 2px 8px;font-family:var(--mono)}
+.delay-input{width:36px;background:transparent;border:none;border-bottom:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:11px;text-align:center;padding:0 2px;outline:none;-moz-appearance:textfield}
+.delay-input::-webkit-inner-spin-button{-webkit-appearance:none}
+.delay-input:focus{border-bottom-color:var(--twitch)}
 
 .auth-panel{background:var(--surface);border-bottom:1px solid var(--border);padding:10px 14px;flex-shrink:0}
 .auth-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
@@ -266,11 +269,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
   <div class="sec"><span class="badge b-tw">Twitch</span></div>
   <div class="field"><label>Channel Name</label><input id="twChannel" oninput="saveField(this)" placeholder="channel_name"></div>
   <div class="field"><label>Client ID</label><input id="twClientId" oninput="saveField(this)" placeholder="abc123..."></div>
-  <div class="field"><label>Streamer Delay (seconds)</label><input id="delaySeconds" oninput="saveField(this)" placeholder="6" type="number" min="0" max="120"></div>
 
   <div class="sec"><span class="badge b-yt">YouTube</span><span class="b-opt">optional</span></div>
   <div class="field"><label>Data API Key</label><input id="ytApiKey" oninput="saveField(this)" placeholder="AIza..."></div>
-  <div class="field"><label>Live Video ID</label><input id="ytVideoId" oninput="saveField(this)" placeholder="dQw4w9WgXcQ"></div>
+  <div class="field"><label>YouTube Channel</label><input id="ytVideoId" oninput="saveField(this)" placeholder="@channelname or channel ID"></div>
   <div class="field"><label>OAuth Client ID</label><input id="ytClientId" oninput="saveField(this)" placeholder="123456-abc.apps.googleusercontent.com"></div>
 
   <div class="btn-row">
@@ -287,7 +289,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
       <button class="mode-btn" id="tab-s" onclick="switchMode('streamer')">Streamer</button>
       <button class="mode-btn" id="tab-m" onclick="switchMode('mod')">Mod</button>
     </div>
-    <div id="delay-badge" class="delay-badge" style="display:none">⏱ 6s delay</div>
+    <div id="delay-badge" class="delay-badge" style="display:none">⏱ <input class="delay-input" id="delaySeconds" type="number" min="0" max="300" value="6" title="Streamer delay (seconds)">s delay</div>
     <div class="dots">
       <div class="dot"><div class="dc" id="d-tw"></div>Twitch</div>
       <div class="dot"><div class="dc" id="d-yt"></div>YouTube</div>
@@ -471,8 +473,9 @@ function updateModeUI(){
   const s=mode==='streamer';
   cls('tab-s','mode-btn'+(s?' as':''));
   cls('tab-m','mode-btn'+(!s?' am':''));
-  el('delay-badge').style.display=s?'block':'none';
-  el('delay-badge').textContent=`⏱ ${DELAY/1000}s delay`;
+  el('delay-badge').style.display=s?'flex':'none';
+  el('delaySeconds').value=DELAY/1000;
+  el('delaySeconds').oninput=()=>{ const v=Math.max(0,Math.min(300,parseInt(el('delaySeconds').value)||0)); DELAY=v*1000; cfg.delay=DELAY; localStorage.setItem('stream-chat-cfg',JSON.stringify(cfg)); };
   el('bn-mod').style.display=s?'none':'flex';
   el('auth-panel').style.display='block';
   const lbl=el('mode-lbl');
@@ -588,7 +591,7 @@ function updateSendUI(){
     btn.disabled = !canSendYt;
   }
   // show/hide YT toggle based on config
-  el('pt-yt').style.display = (cfg.ytKey&&cfg.ytVid) ? '' : 'none';
+  el('pt-yt').style.display = (cfg.ytKey&&cfg.ytVid) ? '' : 'none'; // ytVid = channel handle
 }
 
 function setPlatform(p){
@@ -930,13 +933,46 @@ function parseClearChat(line){
 async function initYoutube(){
   dot('d-yt','spin');
   try{
-    const d=await(await fetch(`https://www.googleapis.com/youtube/v3/videos?part=liveStreamingDetails&id=${cfg.ytVid}&key=${cfg.ytKey}`)).json();
-    ytChatId=d.items?.[0]?.liveStreamingDetails?.activeLiveChatId;
-    if(!ytChatId){dot('d-yt','err');return;}
+    // Step 1: resolve the input to a channel ID (handles @handle, UC... IDs, or legacy usernames)
+    let channelId=null;
+    const raw=(cfg.ytVid||'').trim();
+
+    if(/^UC[a-zA-Z0-9_-]{20,}$/.test(raw)){
+      // Already a channel ID
+      channelId=raw;
+    } else {
+      // Try forHandle (works for @handle with or without the @)
+      const handle=raw.startsWith('@')?raw:'@'+raw;
+      const hr=await fetch(`https://www.googleapis.com/youtube/v3/channels?part=id&forHandle=${encodeURIComponent(handle)}&key=${cfg.ytKey}`);
+      const hd=await hr.json();
+      channelId=hd.items?.[0]?.id||null;
+
+      if(!channelId){
+        // Fallback: legacy forUsername
+        const ur=await fetch(`https://www.googleapis.com/youtube/v3/channels?part=id&forUsername=${encodeURIComponent(raw.replace(/^@/,''))}&key=${cfg.ytKey}`);
+        const ud=await ur.json();
+        channelId=ud.items?.[0]?.id||null;
+      }
+    }
+
+    if(!channelId){dot('d-yt','err');flashErr('YouTube: channel not found. Check the channel name.');return;}
+
+    // Step 2: find the active live broadcast for this channel
+    const sr=await fetch(`https://www.googleapis.com/youtube/v3/search?part=id&channelId=${channelId}&eventType=live&type=video&key=${cfg.ytKey}`);
+    const sd=await sr.json();
+    const videoId=sd.items?.[0]?.id?.videoId||null;
+    if(!videoId){dot('d-yt','err');flashErr('YouTube: no active live stream found for this channel.');return;}
+
+    // Step 3: get the live chat ID from the video
+    const vr=await fetch(`https://www.googleapis.com/youtube/v3/videos?part=liveStreamingDetails&id=${videoId}&key=${cfg.ytKey}`);
+    const vd=await vr.json();
+    ytChatId=vd.items?.[0]?.liveStreamingDetails?.activeLiveChatId||null;
+    if(!ytChatId){dot('d-yt','err');flashErr('YouTube: stream found but live chat is disabled.');return;}
+
     dot('d-yt','ok');
     updateSendUI();
     pollYoutube();
-  }catch{dot('d-yt','err');}
+  }catch(e){dot('d-yt','err');flashErr('YouTube init failed: '+e.message);}
 }
 async function pollYoutube(){
   if(!ytChatId) return;
