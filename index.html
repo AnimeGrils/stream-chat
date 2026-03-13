@@ -185,6 +185,13 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
 
 /* ── CHAT INPUT ── */
 .chat-input-wrap{position:relative;flex-shrink:0}
+.scroll-to-bottom{position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:5px 14px;font-size:12px;color:var(--muted);cursor:pointer;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.3);transition:all .15s;opacity:0;pointer-events:none;display:flex;align-items:center;gap:6px;font-family:var(--font);z-index:10}
+.scroll-to-bottom.visible{opacity:1;pointer-events:auto}
+.scroll-to-bottom:hover{background:var(--surface2);color:var(--text);border-color:var(--twitch)}
+.scroll-to-bottom .stb-hover{display:none}
+.scroll-to-bottom .stb-idle{display:flex;align-items:center;gap:6px}
+.scroll-to-bottom:hover .stb-hover{display:flex;align-items:center;gap:6px}
+.scroll-to-bottom:hover .stb-idle{display:none}
 .chat-input-bar{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--surface);border-top:1px solid var(--border)}
 .platform-toggle{display:flex;gap:1px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:2px;flex-shrink:0}
 .pt-btn{padding:4px 8px;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer;border:none;background:transparent;color:var(--muted);font-family:var(--font);transition:all .12s}
@@ -329,6 +336,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
       <div class="emote-grid" id="emoteGrid"><div class="emote-loading">Loading emotes…</div></div>
     </div>
     <div class="ac-dropdown" id="acDropdown"></div>
+    <button class="scroll-to-bottom" id="scrollToBottomBtn" onclick="scrollToBottom()">
+      <span class="stb-idle">⏸ Chat paused due to scroll</span>
+      <span class="stb-hover">↓ See new messages</span>
+    </button>
     <div id="replyIndicator" style="display:none" class="reply-indicator"><span id="replyIndicatorText"></span><button class="reply-cancel" onclick="cancelReply()" title="Cancel reply">✕</button></div>
     <div class="chat-input-bar">
       <div class="platform-toggle" id="platToggle">
@@ -1714,6 +1725,20 @@ function closeCtx(){
 
 document.addEventListener('click', e => { if(!el('ctxMenu').contains(e.target)) closeCtx(); });
 document.addEventListener('keydown', e => { if(e.key==='Escape') closeCtx(); });
+
+
+// ═══════ SCROLL TO BOTTOM BUTTON ═══════
+document.getElementById('chatArea').addEventListener('scroll', ()=>{
+  const area = document.getElementById('chatArea');
+  const atBottom = area.scrollHeight - area.scrollTop - area.clientHeight < 80;
+  const btn = el('scrollToBottomBtn');
+  if(btn) btn.classList.toggle('visible', !atBottom);
+});
+
+function scrollToBottom(){
+  const area = document.getElementById('chatArea');
+  area.scrollTop = area.scrollHeight;
+}
 
 function renderLoop(){renderMessages();requestAnimationFrame(renderLoop);}
 
