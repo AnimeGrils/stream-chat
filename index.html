@@ -489,8 +489,13 @@ function v(id){return document.getElementById(id).value.trim();}
 function initApp(){
   const savedTw=sessionStorage.getItem('tw_token');
   const savedYt=sessionStorage.getItem('yt_token');
+  const savedTwName=sessionStorage.getItem('tw_display_name');
+  const savedYtName=sessionStorage.getItem('yt_display_name');
   if(savedTw){twToken=savedTw;onTwitchAuthed();}
   if(savedYt){ytToken=savedYt;onYoutubeAuthed();}
+  // Restore display names immediately so they show even before async fetch completes
+  if(savedTwName&&savedTw){el('tw-username').textContent=savedTwName;el('tw-username').className='auth-username visible';}
+  if(savedYtName&&savedYt){el('yt-username').textContent=savedYtName;el('yt-username').className='auth-username visible';}
   updateModeUI();
   if(cfg.fbUrl&&cfg.fbKey) initFirebase(); else showBanner('bn-fbw');
   connectTwitch();
@@ -553,6 +558,7 @@ async function onTwitchAuthed(){
     twUserId=me.data[0].id;
     twDisplayName=me.data[0].display_name;
     twBroadcasterId=bc.data[0].id;
+    sessionStorage.setItem('tw_display_name', twDisplayName);
     el('tw-username').textContent=twDisplayName;
     el('tw-username').className='auth-username visible';
     loadTwitchEmotes();
@@ -570,6 +576,7 @@ async function twFetch(url,opts={}){
 // ═══════ YOUTUBE OAUTH ═══════
 function loginYoutube(){
   if(!cfg.ytCid){flashErr('YouTube OAuth Client ID not configured.');return;}
+  sessionStorage.removeItem('yt_token');
   sessionStorage.setItem('oauth_pending','youtube');
   const scope=encodeURIComponent('https://www.googleapis.com/auth/youtube.force-ssl');
   window.location.href=`https://accounts.google.com/o/oauth2/v2/auth?client_id=${cfg.ytCid}&redirect_uri=${encodeURIComponent(origin())}&response_type=token&prompt=select_account&scope=${scope}`;
@@ -584,7 +591,9 @@ function onYoutubeAuthed(){
   fetch('https://www.googleapis.com/oauth2/v3/userinfo',{headers:{Authorization:'Bearer '+ytToken}})
     .then(r=>r.json()).then(d=>{
       if(d.name||d.email){
-        el('yt-username').textContent=d.name||d.email;
+        const ytName=d.name||d.email;
+        sessionStorage.setItem('yt_display_name', ytName);
+        el('yt-username').textContent=ytName;
         el('yt-username').className='auth-username visible';
       }
     }).catch(()=>{});
@@ -1716,6 +1725,7 @@ function logoutTwitch(){
   el('auth-tw-btn').onclick=loginTwitch;
   el('logout-tw-btn').className='logout-btn';
   el('tw-username').className='auth-username';
+  sessionStorage.removeItem('tw_display_name');
   updateSendUI();
 }
 function logoutYoutube(){
@@ -1726,6 +1736,7 @@ function logoutYoutube(){
   el('auth-yt-btn').onclick=loginYoutube;
   el('logout-yt-btn').className='logout-btn';
   el('yt-username').className='auth-username';
+  sessionStorage.removeItem('yt_display_name');
   updateSendUI();
 }
 
