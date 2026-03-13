@@ -587,16 +587,17 @@ function onYoutubeAuthed(){
   el('auth-yt-btn').onclick=null;
   el('logout-yt-btn').className='logout-btn visible';
   updateSendUI();
-  // Fetch Google display name
-  fetch('https://www.googleapis.com/oauth2/v3/userinfo',{headers:{Authorization:'Bearer '+ytToken}})
+  // Fetch YouTube channel name using the YouTube Data API (works with youtube.force-ssl scope)
+  fetch('https://www.googleapis.com/youtube/v3/channels?part=snippet&mine=true',
+    {headers:{Authorization:'Bearer '+ytToken}})
     .then(r=>r.json()).then(d=>{
-      if(d.name||d.email){
-        const ytName=d.name||d.email;
-        sessionStorage.setItem('yt_display_name', ytName);
-        el('yt-username').textContent=ytName;
+      const name=d.items?.[0]?.snippet?.title;
+      if(name){
+        sessionStorage.setItem('yt_display_name', name);
+        el('yt-username').textContent=name;
         el('yt-username').className='auth-username visible';
       }
-    }).catch(()=>{});
+    }).catch(e=>console.warn('YT name fetch failed',e));
 }
 
 // ═══════ DELETE ═══════
