@@ -1174,60 +1174,59 @@ function renderProfileShell(msg) {
 async function fetchTwitchProfile(msg) {
   if (!twToken) { renderProfileNoAuth(msg); return; }
   try {
-    const [userRes, followRes, subRes] = await Promise.allSettled([
+    const [userRes, followRes, subRes, banRes] = await Promise.allSettled([
       twFetch(`https://api.twitch.tv/helix/users?login=${encodeURIComponent(msg.author)}`),
       twBroadcasterId ? twFetch(`https://api.twitch.tv/helix/channels/followers?broadcaster_id=${twBroadcasterId}&user_id=${msg.authorId||''}`) : Promise.resolve(null),
-      twBroadcasterId && msg.authorId ? twFetch(`https://api.twitch.tv/helix/subscriptions/user?broadcaster_id=${twBroadcasterId}&user_id=${msg.authorId}`).catch(()=>null) : Promise.resolve(null)
+      twBroadcasterId && msg.authorId ? twFetch(`https://api.twitch.tv/helix/subscriptions/user?broadcaster_id=${twBroadcasterId}&user_id=${msg.authorId}`).catch(()=>null) : Promise.resolve(null),
+      twBroadcasterId && msg.authorId ? twFetch(`https://api.twitch.tv/helix/moderation/bans?broadcaster_id=${twBroadcasterId}&user_id=${msg.authorId}`).catch(()=>null) : Promise.resolve(null)
     ]);
-
     const user = userRes.status==='fulfilled' ? userRes.value?.data?.[0] : null;
     const followData = followRes.status==='fulfilled' ? followRes.value : null;
     const subData = subRes.status==='fulfilled' ? subRes.value : null;
-
+    const banData = banRes.status==='fulfilled' ? banRes.value : null;
     if (!user) { renderProfileNoAuth(msg); return; }
 
     const followed = followData?.data?.[0];
     const isSubbed = !!subData?.data?.[0];
+    const isBanned = !!(banData?.data?.[0]);
     const created = new Date(user.created_at);
     const createdStr = created.toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
     const followedStr = followed ? new Date(followed.followed_at).toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'}) : null;
-    const tags = [];
-    if (user.broadcaster_type === 'partner') tags.push({cls:'partner',label:'Partner'});
-    if (user.broadcaster_type === 'affiliate') tags.push({cls:'partner',label:'Affiliate'});
-    if (isSubbed) tags.push({cls:'sub',label:'Subscriber'});
+    const notes = getModNotes(msg.authorId||msg.author);
+    const isMod = mode === 'mod';
 
-    // Update header
+    const subMonths = (() => {
+      const bm = messages.filter(x=>x.platform==='twitch'&&x.author===msg.author&&x.badgeInfoTag).pop();
+      if (!bm) return null;
+      const match = (bm.badgeInfoTag||'').match(/subscriber\/(\d+)/);
+      return match ? parseInt(match[1]) : null;
+    })();
+    const subLabel = subMonths !== null
+      ? (isSubbed ? `Subscribed for ${subMonths} month${subMonths!==1?'s':''}` : `Previously subbed for ${subMonths} month${subMonths!==1?'s':''}`)
+      : null;
+
+    const headerTags = [];
+    if (user.broadcaster_type==='partner') headerTags.push({cls:'partner',label:'Partner'});
+    if (user.broadcaster_type==='affiliate') headerTags.push({cls:'partner',label:'Affiliate'});
+    if (isBanned) headerTags.push({cls:'ban',label:'Banned'});
+
     el('ppHeader').innerHTML = `
       <button class="pp-close" onclick="closeProfile()">✕</button>
       <img class="pp-avatar" src="${user.profile_image_url}" alt="${esc(user.display_name)}">
       <div class="pp-info">
         <div class="pp-name">${esc(user.display_name)}<span class="pp-platform tw">TW</span></div>
-        <div class="pp-sub">${esc(user.description||'No bio')}</div>
         <div class="pp-tags">
-          ${tags.map(t=>`<span class="pp-tag ${t.cls}">${t.label}</span>`).join('')}
-          ${followedStr?`<span class="pp-tag mod">Following since ${followedStr}</span>`:'<span class="pp-tag">Not following</span>'}
+          ${headerTags.map(t=>`<span class="pp-tag ${t.cls}">${t.label}</span>`).join('')}
+          <span class="pp-tag">Account created ${createdStr}</span>
+          ${followedStr ? `<span class="pp-tag mod">Following since ${followedStr}</span>` : '<span class="pp-tag">Not following</span>'}
+          ${subLabel ? `<span class="pp-tag sub">${subLabel}</span>` : ''}
         </div>
       </div>`;
 
-    // Build body
-    const history = messages.filter(m=>m.platform==='twitch'&&m.author===msg.author).slice(-30);
-    const isMod = mode === 'mod';
+    const history = messages.filter(m=>m.platform==='twitch'&&m.author===msg.author);
 
     el('ppBody').innerHTML = `
-      <div>
-        <div class="pp-section-title">Account info</div>
-        <div class="pp-stats">
-          <div class="pp-stat"><div class="pp-stat-val">${createdStr}</div><div class="pp-stat-lbl">Account created</div></div>
-          <div class="pp-stat"><div class="pp-stat-val">${followedStr||'—'}</div><div class="pp-stat-lbl">Following since</div></div>
-          <div class="pp-stat"><div class="pp-stat-val">${(()=>{const days=Math.floor((Date.now()-new Date(user.created_at))/(1000*60*60*24));return days>=365?Math.floor(days/365)+'y '+Math.floor((days%365)/30)+'m':days+'d';})()}</div><div class="pp-stat-lbl">Account age</div></div>
-          <div class="pp-stat"><div class="pp-stat-val">${isSubbed?'Yes':'No'}</div><div class="pp-stat-lbl">Subscriber</div></div>
-        </div>
-        <a class="pp-ext-link" href="https://twitch.tv/${encodeURIComponent(user.login)}" target="_blank">↗ View Twitch channel</a>
-      </div>
-      <div>
-        <div class="pp-section-title">Message history this session (${history.length})</div>
-        <div class="pp-history">${history.length?history.map(m=>`<div class="pp-hist-msg${deletedIds.has(m.id)?' deleted-hist':''}">${esc(m.text)}</div>`).join(''):'<div class="pp-loading">No messages yet</div>'}</div>
-      </div>
+      <a class="pp-ext-link" href="https://twitch.tv/${encodeURIComponent(user.login)}" target="_blank">↗ View Twitch channel</a>
       ${isMod ? `<div>
         <div class="pp-section-title">Moderation</div>
         <div class="pp-mod-actions">
@@ -1239,8 +1238,16 @@ async function fetchTwitchProfile(msg) {
             <button class="pp-mod-btn ban" onclick="openBanModal('${esc(msg.authorId||'')}','${esc(msg.author)}')">Ban</button>
             <button class="pp-mod-btn unban" onclick="unbanTwitchUser('${esc(msg.authorId||'')}','${esc(msg.author)}')">Unban</button>
           </div>
+          <div style="margin-top:6px">
+            <div class="pp-section-title" style="margin-bottom:5px">Mod notes</div>
+            <textarea class="pp-notes" placeholder="Notes about this user (saved locally)..." oninput="saveModNotes('${esc(msg.authorId||msg.author)}',this.value)">${esc(notes)}</textarea>
+          </div>
         </div>
       </div>` : ''}
+      <div>
+        <div class="pp-section-title">Message history this session (${history.length})</div>
+        <div class="pp-history">${history.length ? history.map(m=>`<div class="pp-hist-msg${deletedIds.has(m.id)?' deleted-hist':''}">${esc(m.text)}</div>`).join('') : '<div class="pp-loading">No messages yet</div>'}</div>
+      </div>
     `;
   } catch(e) {
     el('ppBody').innerHTML = `<div class="pp-loading">Failed to load profile</div>`;
@@ -1248,27 +1255,20 @@ async function fetchTwitchProfile(msg) {
 }
 
 function renderYoutubeProfile(msg) {
-  const history = messages.filter(m=>m.platform==='youtube'&&m.author===msg.author).slice(-30);
+  const history = messages.filter(m=>m.platform==='youtube'&&m.author===msg.author);
   const isMod = mode === 'mod';
   const channelId = msg.authorId||'';
+  const notes = getModNotes(channelId||msg.author);
 
   el('ppHeader').innerHTML = `
     <button class="pp-close" onclick="closeProfile()">✕</button>
     <div class="pp-avatar-placeholder" style="color:#ff5555">${esc(msg.author[0]||'?').toUpperCase()}</div>
     <div class="pp-info">
       <div class="pp-name">${esc(msg.author)}<span class="pp-platform yt">YT</span></div>
-      <div class="pp-sub">YouTube viewer</div>
+      ${channelId ? `<a class="pp-ext-link" href="https://youtube.com/channel/${encodeURIComponent(channelId)}" target="_blank" style="font-size:11px">↗ View YouTube channel</a>` : ''}
     </div>`;
 
   el('ppBody').innerHTML = `
-    <div>
-      <div class="pp-section-title">Channel</div>
-      ${channelId ? `<a class="pp-ext-link" href="https://youtube.com/channel/${encodeURIComponent(channelId)}" target="_blank">↗ View YouTube channel</a>` : '<div class="pp-loading">No channel ID available</div>'}
-    </div>
-    <div>
-      <div class="pp-section-title">Message history this session (${history.length})</div>
-      <div class="pp-history">${history.length?history.map(m=>`<div class="pp-hist-msg${deletedIds.has(m.id)?' deleted-hist':''}">${esc(m.text)}</div>`).join(''):'<div class="pp-loading">No messages yet</div>'}</div>
-    </div>
     ${isMod ? `<div>
       <div class="pp-section-title">Moderation</div>
       <div class="pp-mod-actions">
@@ -1276,8 +1276,16 @@ function renderYoutubeProfile(msg) {
           <button class="pp-mod-btn to" onclick="openYtTimeoutModal('${esc(channelId)}','${esc(msg.author)}')">Timeout</button>
           <button class="pp-mod-btn ban" onclick="openYtBanModal('${esc(channelId)}','${esc(msg.author)}')">Ban</button>
         </div>
+        <div style="margin-top:6px">
+          <div class="pp-section-title" style="margin-bottom:5px">Mod notes</div>
+          <textarea class="pp-notes" placeholder="Notes about this user (saved locally)..." oninput="saveModNotes('${esc(channelId||msg.author)}',this.value)">${esc(notes)}</textarea>
+        </div>
       </div>
     </div>` : ''}
+    <div>
+      <div class="pp-section-title">Message history this session (${history.length})</div>
+      <div class="pp-history">${history.length ? history.map(m=>`<div class="pp-hist-msg${deletedIds.has(m.id)?' deleted-hist':''}">${esc(m.text)}</div>`).join('') : '<div class="pp-loading">No messages yet</div>'}</div>
+    </div>
   `;
 }
 
