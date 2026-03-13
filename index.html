@@ -905,6 +905,9 @@ function parseClearChat(line){
     delete timedOutUsers[user];
   }
   messages.filter(m=>m.platform==='twitch'&&m.author.toLowerCase()===user).forEach(m=>syncDelete(m.id));
+  // Find the display name (mixed case) for button refresh
+  const displayName=(messages.find(m=>m.platform==='twitch'&&m.author.toLowerCase()===user)||{}).author;
+  if(displayName) setTimeout(()=>refreshModButtons(displayName),0);
 }
 
 // ═══════ YOUTUBE ═══════
@@ -1010,15 +1013,7 @@ function renderMessages(){
   const atBottom=area.scrollHeight-area.scrollTop-area.clientHeight<80;
   let added=false;
   toShow.forEach(msg=>{
-    if(rendered.has(msg.id)){
-      // Refresh action buttons in mod view so timeout/ban state stays current
-      if(mode==='mod'){
-        const node=rendered.get(msg.id);
-        const actions=node.querySelector('.msg-actions');
-        if(actions) actions.outerHTML=buildModActions(msg,deletedIds.has(msg.id));
-      }
-      return;
-    }
+    if(rendered.has(msg.id)) return;
     area.appendChild(buildMsg(msg));
     added=true;
   });
@@ -1226,6 +1221,7 @@ async function modalConfirm(){
       messages.filter(m=>m.platform==='twitch'&&m.author===modalAction.username).forEach(m=>syncDelete(m.id));
     }
     closeModal();
+    refreshModButtons(modalAction.username);
   }catch(e){
     flashErr('Action failed: '+e.message);
     btn.disabled=false;
@@ -1390,7 +1386,7 @@ async function untimeoutUser(userId, username) {
     const ulow=(username||'').toLowerCase();
     delete timedOutUsers[ulow];
     flashSuccess('Removed timeout for '+username);
-    renderMessages();
+    refreshModButtons(username);
   }catch(e){flashErr('Untimeout failed: '+e.message);}
 }
 
@@ -1399,7 +1395,9 @@ async function unbanTwitchUser(userId, username) {
   try {
     await fetch(`https://api.twitch.tv/helix/moderation/bans?broadcaster_id=${twBroadcasterId}&moderator_id=${twUserId}&user_id=${userId}`,
       { method:'DELETE', headers:{'Authorization':`Bearer ${twToken}`,'Client-Id':cfg.twCid} });
+    bannedUsers.delete((username||'').toLowerCase());
     flashSuccess('Unbanned '+username);
+    refreshModButtons(username);
   } catch(e) { flashErr('Unban failed: '+e.message); }
 }
 
@@ -1421,6 +1419,23 @@ document.addEventListener('click', e => {
   }
 });
 
+
+
+// Refresh action buttons for all visible messages from a given username
+function refreshModButtons(username){
+  if(mode!=='mod') return;
+  const area=document.getElementById('chatArea');
+  area.querySelectorAll('.msg').forEach(node=>{
+    const id=node.dataset.id;
+    const msg=msgMap.get(id);
+    if(!msg||msg.author!==username) return;
+    const actions=node.querySelector('.msg-actions');
+    if(!actions) return;
+    const tmp=document.createElement('div');
+    tmp.innerHTML=buildModActions(msg,deletedIds.has(msg.id));
+    actions.replaceWith(tmp.firstElementChild);
+  });
+}
 
 // ═══════ YOUTUBE MOD ACTIONS ═══════
 function openYtTimeoutModal(channelId, username){
