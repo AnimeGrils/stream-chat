@@ -491,11 +491,11 @@ function initApp(){
   const savedYt=sessionStorage.getItem('yt_token');
   const savedTwName=sessionStorage.getItem('tw_display_name');
   const savedYtName=sessionStorage.getItem('yt_display_name');
-  if(savedTw){twToken=savedTw;onTwitchAuthed();}
-  if(savedYt){ytToken=savedYt;onYoutubeAuthed();}
-  // Restore display names immediately so they show even before async fetch completes
+  // Restore names first so they show immediately; async fetches will overwrite with fresh data
   if(savedTwName&&savedTw){el('tw-username').textContent=savedTwName;el('tw-username').className='auth-username visible';}
   if(savedYtName&&savedYt){el('yt-username').textContent=savedYtName;el('yt-username').className='auth-username visible';}
+  if(savedTw){twToken=savedTw;onTwitchAuthed();}
+  if(savedYt){ytToken=savedYt;onYoutubeAuthed();}
   updateModeUI();
   if(cfg.fbUrl&&cfg.fbKey) initFirebase(); else showBanner('bn-fbw');
   connectTwitch();
