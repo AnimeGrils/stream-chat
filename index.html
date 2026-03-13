@@ -89,6 +89,14 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
 .emote{height:24px;width:auto;vertical-align:middle;margin:0 1px}
 .msg-actions{flex-shrink:0;opacity:0;transition:opacity .1s;display:flex;gap:4px}
 .msg:hover .msg-actions{opacity:1}
+.msg.msg-deleted{opacity:.45}
+.msg.msg-deleted .msg-text{text-decoration:line-through}
+.ctx-menu{position:fixed;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:4px 0;z-index:900;min-width:200px;box-shadow:0 4px 16px rgba(0,0,0,.4)}
+.ctx-item{padding:7px 14px;font-size:12px;cursor:pointer;color:var(--text);transition:background .1s}
+.ctx-item:hover{background:var(--surface2)}
+.ctx-item.danger{color:var(--del)}
+.ctx-sep{height:1px;background:var(--border);margin:3px 0}
+.ctx-preview{padding:5px 14px 8px;font-size:11px;color:var(--muted);font-family:var(--mono);max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .del-btn{background:rgba(255,107,107,.12);border:1px solid rgba(255,107,107,.28);color:var(--del);font-size:10px;font-weight:600;padding:3px 8px;border-radius:4px;cursor:pointer;font-family:var(--font);transition:all .12s}
 .del-btn:hover{background:rgba(255,107,107,.28)}
 .del-btn:disabled{background:transparent;border-color:transparent;color:var(--muted);cursor:default;font-style:italic}
@@ -116,6 +124,12 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
 .modal-slider-row{display:flex;align-items:center;gap:10px}
 .modal-slider-row input[type=range]{flex:1;accent-color:var(--twitch)}
 .modal-slider-val{font-family:var(--mono);font-size:13px;color:var(--text);min-width:70px;text-align:right}
+.to-snaps{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+.to-snap{background:var(--surface2);border:1px solid var(--border);border-radius:4px;font-size:11px;padding:3px 8px;cursor:pointer;font-family:var(--mono);color:var(--muted);transition:all .12s}
+.to-snap:hover{border-color:var(--twitch);color:var(--text)}
+.to-snap.active{background:rgba(145,70,255,.15);border-color:var(--twitch);color:var(--twitch)}
+.to-input{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--mono);font-size:12px;outline:none;width:90px;transition:border-color .15s}
+.to-input:focus{border-color:var(--twitch)}
 .modal-btns{display:flex;gap:8px;justify-content:flex-end}
 .modal-cancel{background:transparent;border:1px solid var(--border);color:var(--muted);padding:7px 16px;border-radius:7px;font-family:var(--font);font-size:13px;font-weight:600;cursor:pointer;transition:all .12s}.modal-cancel:hover{border-color:var(--muted);color:var(--text)}
 .modal-confirm{border:none;padding:7px 16px;border-radius:7px;font-family:var(--font);font-size:13px;font-weight:600;cursor:pointer;transition:all .12s}
@@ -203,9 +217,6 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
 .pp-history{display:flex;flex-direction:column;gap:4px;max-height:200px;overflow-y:auto;padding-right:2px}
 .pp-history::-webkit-scrollbar{width:3px}
 .pp-history::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
-.pp-notes{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-family:var(--mono);font-size:12px;outline:none;resize:none;height:64px;transition:border-color .15s;line-height:1.5}
-.pp-notes:focus{border-color:var(--twitch)}
-.pp-notes::placeholder{color:var(--muted)}
 .pp-hist-msg{font-size:12px;font-family:var(--mono);padding:5px 8px;background:var(--surface2);border-radius:5px;color:rgba(232,232,240,.8);line-height:1.45;border-left:2px solid var(--border)}
 .pp-hist-msg.deleted-hist{opacity:.4;text-decoration:line-through}
 .pp-mod-actions{display:flex;flex-direction:column;gap:7px}
@@ -324,6 +335,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
     <div class="pp-body" id="ppBody"></div>
   </div>
 
+  <div id="ctxMenu" class="ctx-menu" style="display:none"></div>
   <!-- Mod modals -->
   <div class="modal-overlay" id="modalOverlay">
     <div class="modal" id="modalBox">
@@ -369,6 +381,8 @@ let DELAY = 6000;
 let mode='streamer', cfg={}, messages=[], deletedIds=new Set();
 let fbRef=null, twitchWs=null;
 let twToken=null, twUserId=null, twBroadcasterId=null, twDisplayName=null, ytToken=null;
+const timedOutUsers={}; // username.lower -> {until: ms, duration: s}
+const bannedUsers=new Set(); // username.lower
 let ownMessageIds=new Set();
 const msgMap=new Map(); // id -> msg object for profile lookup
 const sessionActions={}; // userId -> {timeouts:n, bans:n}
@@ -880,9 +894,17 @@ function parseClearMsg(line){const id=parseTags(line)['target-msg-id'];if(id)syn
 function parseClearChat(line){
   const tags=parseTags(line);
   const parts=line.trim().split(' ');
-  const user=parts[parts.length-1].replace(':','').trim();
-  if(user&&!tags['target-msg-id'])
-    messages.filter(m=>m.platform==='twitch'&&m.author.toLowerCase()===user.toLowerCase()).forEach(m=>syncDelete(m.id));
+  const user=parts[parts.length-1].replace(':','').trim().toLowerCase();
+  if(!user) return;
+  const dur=parseInt(tags['ban-duration']||'0');
+  if(dur>0){
+    timedOutUsers[user]={until:Date.now()+dur*1000,duration:dur};
+    delete bannedUsers[user];
+  } else if(!tags['ban-duration']) {
+    bannedUsers.add(user);
+    delete timedOutUsers[user];
+  }
+  messages.filter(m=>m.platform==='twitch'&&m.author.toLowerCase()===user).forEach(m=>syncDelete(m.id));
 }
 
 // ═══════ YOUTUBE ═══════
@@ -972,7 +994,7 @@ function renderMsgText(text, emotesTag){
 function renderMessages(){
   const area=document.getElementById('chatArea');
   const now=Date.now(),s=mode==='streamer';
-  const toShow=s?messages.filter(m=>!deletedIds.has(m.id)&&(ownMessageIds.has(m.id)||now-m.ts>=DELAY)):messages;
+  const toShow=s?messages.filter(m=>!deletedIds.has(m.id)&&(ownMessageIds.has(m.id)||now-m.ts>=DELAY)):messages.filter(m=>!deletedIds.has(m.id)||mode==='mod');
   el('cnt-vis').textContent=toShow.filter(m=>!deletedIds.has(m.id)).length;
   el('cnt-del').textContent=deletedIds.size;
   el('emptyState').style.display=toShow.length===0?'flex':'none';
@@ -980,7 +1002,10 @@ function renderMessages(){
   const showSet=new Set(toShow.map(m=>m.id));
   rendered.forEach((node,id)=>{
     if(!showSet.has(id)){node.remove();return;}
-    if(deletedIds.has(id)){const btn=node.querySelector('.del-btn');if(btn&&!btn.disabled){btn.textContent='deleted';btn.disabled=true;}}
+    if(deletedIds.has(id)){
+      if(mode==='mod') node.classList.add('msg-deleted');
+      else node.remove();
+    }
   });
   const atBottom=area.scrollHeight-area.scrollTop-area.clientHeight<80;
   let added=false;
@@ -1006,23 +1031,35 @@ function buildMsg(msg){
 }
 
 function buildModActions(msg, isDel){
+  const aid=msg.authorId||'';
+  const aname=esc(msg.author);
+  const ulow=(msg.author||'').toLowerCase();
   if(msg.platform==='youtube'){
-    const aid=msg.authorId||'';
-    const aname=esc(msg.author);
     return `<div class="msg-actions">
-      <button class="mod-btn del" ${isDel?'disabled':''} onclick="handleDelete('${esc(msg.id)}','youtube',this)">${isDel?'deleted':'delete'}</button>
       <button class="mod-btn to" onclick="openYtTimeoutModal('${aid}','${aname}')">timeout</button>
       <button class="mod-btn ban" onclick="openYtBanModal('${aid}','${aname}')">ban</button>
     </div>`;
   }
-  const aid=msg.authorId||'';
-  const aname=esc(msg.author);
+  const isTO=!!timedOutUsers[ulow]&&timedOutUsers[ulow].until>Date.now();
+  const isBan=bannedUsers.has(ulow);
+  const toBtn=isTO
+    ? `<button class="mod-btn unban" onclick="untimeoutUser('${aid}','${aname}')">untimeout${toRemaining(ulow)}</button>`
+    : `<button class="mod-btn to" onclick="openTimeoutModal('${aid}','${aname}')">timeout</button>`;
+  const banBtn=isBan
+    ? `<button class="mod-btn unban" onclick="unbanTwitchUser('${aid}','${aname}')">unban</button>`
+    : `<button class="mod-btn ban" onclick="openBanModal('${aid}','${aname}')">ban</button>`;
   return `<div class="msg-actions">
-    <button class="mod-btn del" ${isDel?'disabled':''} onclick="handleDelete('${esc(msg.id)}','twitch',this)">${isDel?'deleted':'delete'}</button>
     <button class="mod-btn warn" onclick="openWarnModal('${aid}','${aname}')">warn</button>
-    <button class="mod-btn to" onclick="openTimeoutModal('${aid}','${aname}')">timeout</button>
-    <button class="mod-btn ban" onclick="openBanModal('${aid}','${aname}')">ban</button>
+    ${toBtn}
+    ${banBtn}
   </div>`;
+}
+
+function toRemaining(ulow){
+  const d=timedOutUsers[ulow];
+  if(!d) return '';
+  const rem=Math.max(0,Math.round((d.until-Date.now())/1000));
+  return rem>0?' ('+formatDuration(rem)+')':'';
 }
 
 // ═══════ MOD MODALS ═══════
@@ -1045,19 +1082,62 @@ function openTimeoutModal(userId, username){
   modalAction={type:'timeout',userId,username};
   el('modalTitle').textContent='Timeout '+username;
   el('modalSub').textContent='Temporarily prevent this user from chatting.';
+  const snaps=[1,30,60,300,600,1800,3600,7200,21600,43200,86400,259200,604800,1209600];
+  const snapLabels=['1s','30s','1m','5m','10m','30m','1h','2h','6h','12h','1d','3d','7d','14d'];
   el('modalBody').innerHTML=`
     <div>
       <label>Duration</label>
-      <div class="modal-slider-row">
-        <input type="range" id="toSlider" min="1" max="1209600" value="600" step="1" oninput="updateToLabel()">
-        <span class="modal-slider-val" id="toLabel">10 min</span>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <input type="range" id="toSlider" min="0" max="${snaps.length-1}" value="4" step="1" style="flex:1;accent-color:var(--twitch)" oninput="onToSlider()">
+        <input type="text" class="to-input" id="toInput" value="10m" oninput="onToInput()" placeholder="e.g. 10m">
+      </div>
+      <div class="to-snaps" id="toSnaps">
+        ${snaps.map((s,i)=>`<button class="to-snap${i===4?' active':''}" onclick="setToSnap(${i})">${snapLabels[i]}</button>`).join('')}
       </div>
     </div>
-    <div><label>Reason</label><input type="text" id="modalReason" placeholder="Reason (optional)" maxlength="500"></div>`;
+    <div style="margin-top:10px"><label>Reason</label><input type="text" id="modalReason" placeholder="Reason (optional)" maxlength="500"></div>`;
   el('modalConfirmBtn').className='modal-confirm to';
   el('modalConfirmBtn').textContent='Timeout';
   el('modalOverlay').classList.add('open');
-  setTimeout(()=>updateToLabel(),10);
+  window._toSnaps=snaps; window._toSnapIdx=4;
+  setTimeout(()=>el('modalReason')?.focus(),50);
+}
+
+function setToSnap(i){
+  window._toSnapIdx=i;
+  el('toSlider').value=i;
+  el('toInput').value=formatDuration(window._toSnaps[i]);
+  document.querySelectorAll('.to-snap').forEach((b,j)=>b.classList.toggle('active',j===i));
+}
+
+function onToSlider(){
+  const i=parseInt(el('toSlider').value);
+  setToSnap(i);
+}
+
+function onToInput(){
+  const raw=el('toInput').value.trim();
+  const s=parseDuration(raw);
+  if(!s) return;
+  // find nearest snap
+  const snaps=window._toSnaps||[];
+  let best=0,bestDiff=Infinity;
+  snaps.forEach((sv,i)=>{const d=Math.abs(sv-s);if(d<bestDiff){bestDiff=d;best=i;}});
+  window._toSnapIdx=best;
+  el('toSlider').value=best;
+  document.querySelectorAll('.to-snap').forEach((b,j)=>b.classList.toggle('active',j===best));
+}
+
+function parseDuration(str){
+  str=str.trim().toLowerCase();
+  const m=str.match(/^(\d+)\s*(s|sec|m|min|h|hr|d|day)?$/);
+  if(!m) return null;
+  const n=parseInt(m[1]);
+  const u=m[2]||'s';
+  if(u.startsWith('d')) return n*86400;
+  if(u.startsWith('h')) return n*3600;
+  if(u.startsWith('m')) return n*60;
+  return n;
 }
 
 function openBanModal(userId, username){
@@ -1070,11 +1150,6 @@ function openBanModal(userId, username){
   el('modalConfirmBtn').textContent='Ban User';
   el('modalOverlay').classList.add('open');
   setTimeout(()=>el('modalReason')?.focus(),50);
-}
-
-function updateToLabel(){
-  const s=parseInt(el('toSlider').value);
-  el('toLabel').textContent=formatDuration(s);
 }
 
 function formatDuration(s){
@@ -1097,7 +1172,8 @@ async function modalConfirm(){
 
   try{
     if(modalAction.type==='yt-timeout'){
-      const dur=parseInt(el('toSlider').value);
+      const raw=el('toInput')?.value||'';
+      const dur=parseDuration(raw)||window._toSnaps[window._toSnapIdx||4]||300;
       await ytBanUser(modalAction.channelId, dur);
       flashSuccess('Timed out '+modalAction.username+' for '+formatDuration(dur));
       if(modalAction.channelId){if(!sessionActions[modalAction.channelId])sessionActions[modalAction.channelId]={timeouts:0,bans:0};sessionActions[modalAction.channelId].timeouts++;}
@@ -1120,7 +1196,11 @@ async function modalConfirm(){
     } else {
       const body={user_id:modalAction.userId};
       if(reason) body.reason=reason;
-      if(modalAction.type==='timeout') body.duration=parseInt(el('toSlider').value);
+      if(modalAction.type==='timeout'){
+        const raw=el('toInput')?.value||'';
+        const parsed=parseDuration(raw);
+        body.duration=parsed||window._toSnaps[window._toSnapIdx||4]||600;
+      }
       await twFetch(`https://api.twitch.tv/helix/moderation/bans?broadcaster_id=${twBroadcasterId}&moderator_id=${twUserId}`,{
         method:'POST',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({data:body})
@@ -1192,7 +1272,6 @@ async function fetchTwitchProfile(msg) {
     const created = new Date(user.created_at);
     const createdStr = created.toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
     const followedStr = followed ? new Date(followed.followed_at).toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'}) : null;
-    const notes = getModNotes(msg.authorId||msg.author);
     const isMod = mode === 'mod';
 
     const subMonths = (() => {
@@ -1232,16 +1311,12 @@ async function fetchTwitchProfile(msg) {
         <div class="pp-mod-actions">
           <div class="pp-mod-row">
             <button class="pp-mod-btn warn" onclick="openWarnModal('${esc(msg.authorId||'')}','${esc(msg.author)}')">Warn</button>
-            <button class="pp-mod-btn to" onclick="openTimeoutModal('${esc(msg.authorId||'')}','${esc(msg.author)}')">Timeout</button>
+            ${(()=>{const ulow=msg.author.toLowerCase();const isTO=!!timedOutUsers[ulow]&&timedOutUsers[ulow].until>Date.now();return isTO?`<button class="pp-mod-btn unban" onclick="untimeoutUser('${esc(msg.authorId||'')}','${esc(msg.author)}')">Untimeout${toRemaining(ulow)}</button>`:`<button class="pp-mod-btn to" onclick="openTimeoutModal('${esc(msg.authorId||'')}','${esc(msg.author)}')">Timeout</button>`;})()}
           </div>
           <div class="pp-mod-row">
-            <button class="pp-mod-btn ban" onclick="openBanModal('${esc(msg.authorId||'')}','${esc(msg.author)}')">Ban</button>
-            <button class="pp-mod-btn unban" onclick="unbanTwitchUser('${esc(msg.authorId||'')}','${esc(msg.author)}')">Unban</button>
+            ${(()=>{const ulow=msg.author.toLowerCase();const isBan=bannedUsers.has(ulow);return isBan?`<button class="pp-mod-btn unban" onclick="unbanTwitchUser('${esc(msg.authorId||'')}','${esc(msg.author)}')">Unban</button>`:`<button class="pp-mod-btn ban" onclick="openBanModal('${esc(msg.authorId||'')}','${esc(msg.author)}')">Ban</button>`;})()}
           </div>
-          <div style="margin-top:6px">
-            <div class="pp-section-title" style="margin-bottom:5px">Mod notes</div>
-            <textarea class="pp-notes" placeholder="Notes about this user (saved locally)..." oninput="saveModNotes('${esc(msg.authorId||msg.author)}',this.value)">${esc(notes)}</textarea>
-          </div>
+
         </div>
       </div>` : ''}
       <div>
@@ -1258,7 +1333,6 @@ function renderYoutubeProfile(msg) {
   const history = messages.filter(m=>m.platform==='youtube'&&m.author===msg.author);
   const isMod = mode === 'mod';
   const channelId = msg.authorId||'';
-  const notes = getModNotes(channelId||msg.author);
 
   el('ppHeader').innerHTML = `
     <button class="pp-close" onclick="closeProfile()">✕</button>
@@ -1276,10 +1350,7 @@ function renderYoutubeProfile(msg) {
           <button class="pp-mod-btn to" onclick="openYtTimeoutModal('${esc(channelId)}','${esc(msg.author)}')">Timeout</button>
           <button class="pp-mod-btn ban" onclick="openYtBanModal('${esc(channelId)}','${esc(msg.author)}')">Ban</button>
         </div>
-        <div style="margin-top:6px">
-          <div class="pp-section-title" style="margin-bottom:5px">Mod notes</div>
-          <textarea class="pp-notes" placeholder="Notes about this user (saved locally)..." oninput="saveModNotes('${esc(channelId||msg.author)}',this.value)">${esc(notes)}</textarea>
-        </div>
+
       </div>
     </div>` : ''}
     <div>
@@ -1297,6 +1368,18 @@ function renderProfileNoAuth(msg) {
       <div class="pp-section-title">Message history this session (${history.length})</div>
       <div class="pp-history">${history.map(m=>`<div class="pp-hist-msg">${esc(m.text)}</div>`).join('')}</div>
     </div>`;
+}
+
+async function untimeoutUser(userId, username) {
+  if(!twToken){flashErr('Log in with Twitch first.');return;}
+  try{
+    await fetch(`https://api.twitch.tv/helix/moderation/bans?broadcaster_id=${twBroadcasterId}&moderator_id=${twUserId}&user_id=${userId}`,
+      {method:'DELETE',headers:{'Authorization':`Bearer ${twToken}`,'Client-Id':cfg.twCid}});
+    const ulow=(username||'').toLowerCase();
+    delete timedOutUsers[ulow];
+    flashSuccess('Removed timeout for '+username);
+    renderMessages();
+  }catch(e){flashErr('Untimeout failed: '+e.message);}
 }
 
 async function unbanTwitchUser(userId, username) {
@@ -1327,27 +1410,29 @@ document.addEventListener('click', e => {
 });
 
 
-function getModNotes(userId){ return localStorage.getItem('mcnotes_'+userId)||''; }
-function saveModNotes(userId, text){ localStorage.setItem('mcnotes_'+userId, text); }
-
 // ═══════ YOUTUBE MOD ACTIONS ═══════
 function openYtTimeoutModal(channelId, username){
   if(!ytToken){flashErr('Log in with Google first.');return;}
   modalAction={type:'yt-timeout',channelId,username};
   el('modalTitle').textContent='Timeout '+username;
-  el('modalSub').textContent='Temporarily ban this user from YouTube chat.';
+  el('modalSub').textContent='Temporarily ban this user from YouTube chat (max 24h).';
+  const snaps=[1,30,60,300,600,1800,3600,7200,21600,43200,86400];
+  const snapLabels=['1s','30s','1m','5m','10m','30m','1h','2h','6h','12h','24h'];
   el('modalBody').innerHTML=`
     <div>
       <label>Duration</label>
-      <div class="modal-slider-row">
-        <input type="range" id="toSlider" min="1" max="86400" value="300" step="1" oninput="updateToLabel()">
-        <span class="modal-slider-val" id="toLabel">5 min</span>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <input type="range" id="toSlider" min="0" max="${snaps.length-1}" value="3" step="1" style="flex:1;accent-color:var(--twitch)" oninput="onToSlider()">
+        <input type="text" class="to-input" id="toInput" value="5m" oninput="onToInput()" placeholder="e.g. 10m">
+      </div>
+      <div class="to-snaps" id="toSnaps">
+        ${snaps.map((s,i)=>`<button class="to-snap${i===3?' active':''}" onclick="setToSnap(${i})">${snapLabels[i]}</button>`).join('')}
       </div>
     </div>`;
   el('modalConfirmBtn').className='modal-confirm to';
   el('modalConfirmBtn').textContent='Timeout';
   el('modalOverlay').classList.add('open');
-  setTimeout(()=>updateToLabel(),10);
+  window._toSnaps=snaps; window._toSnapIdx=3;
 }
 
 function openYtBanModal(channelId, username){
@@ -1375,6 +1460,55 @@ async function ytBanUser(channelId, durationSeconds){
 
 // Close modal on overlay click
 el('modalOverlay').addEventListener('click',e=>{if(e.target===el('modalOverlay'))closeModal();});
+
+
+// ═══════ CONTEXT MENU ═══════
+let ctxTarget = null;
+
+el('chatArea').addEventListener('contextmenu', e => {
+  if(mode !== 'mod') return;
+  const msgEl = e.target.closest('.msg');
+  if(!msgEl) return;
+  e.preventDefault();
+  const id = msgEl.dataset.id;
+  const msg = msgMap.get(id);
+  if(!msg) return;
+  ctxTarget = msg;
+  showCtxMenu(e.clientX, e.clientY, msg);
+});
+
+function showCtxMenu(x, y, msg){
+  const menu = el('ctxMenu');
+  const isDel = deletedIds.has(msg.id);
+  const preview = msg.text.length > 40 ? msg.text.slice(0,40)+'…' : msg.text;
+  menu.innerHTML = `
+    <div class="ctx-preview">${esc(preview)}</div>
+    <div class="ctx-sep"></div>
+    ${!isDel ? `<div class="ctx-item danger" onclick="ctxDelete()">Delete message</div>` : '<div class="ctx-item" style="opacity:.4;cursor:default">Already deleted</div>'}
+    <div class="ctx-sep"></div>
+    <div class="ctx-item" onclick="openProfile('${esc(msg.id)}');closeCtx()">View profile</div>
+  `;
+  menu.style.display = 'block';
+  // Keep menu inside viewport
+  const vw = window.innerWidth, vh = window.innerHeight;
+  const mw = 220, mh = 120;
+  menu.style.left = (x + mw > vw ? vw - mw - 8 : x) + 'px';
+  menu.style.top  = (y + mh > vh ? vh - mh - 8 : y) + 'px';
+}
+
+function ctxDelete(){
+  if(!ctxTarget) return;
+  handleDelete(ctxTarget.id, ctxTarget.platform, null);
+  closeCtx();
+}
+
+function closeCtx(){
+  el('ctxMenu').style.display = 'none';
+  ctxTarget = null;
+}
+
+document.addEventListener('click', () => closeCtx());
+document.addEventListener('keydown', e => { if(e.key==='Escape') closeCtx(); });
 
 function renderLoop(){renderMessages();requestAnimationFrame(renderLoop);}
 
