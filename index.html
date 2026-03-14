@@ -507,6 +507,12 @@ function v(id){return document.getElementById(id).value.trim();}
 
 // ═══════ INIT ═══════
 function initApp(){
+  // If delay was customised in a previous session, restore it
+  const savedDelaySec=localStorage.getItem('sc_delaySeconds');
+  if(savedDelaySec&&!isNaN(savedDelaySec)&&cfg.delay===undefined){
+    const v=Math.max(0,Math.min(300,parseInt(savedDelaySec)));
+    DELAY=v*1000; cfg.delay=DELAY;
+  }
   const savedTw=sessionStorage.getItem('tw_token');
   const savedYt=sessionStorage.getItem('yt_token');
   const savedTwName=sessionStorage.getItem('tw_display_name');
@@ -531,7 +537,7 @@ function updateModeUI(){
   cls('tab-m','mode-btn'+(!s?' am':''));
   el('delay-badge').style.display=s?'flex':'none';
   el('delaySeconds').value=DELAY/1000;
-  el('delaySeconds').oninput=()=>{ const v=Math.max(0,Math.min(300,parseInt(el('delaySeconds').value)||0)); DELAY=v*1000; cfg.delay=DELAY; localStorage.setItem('stream-chat-cfg',JSON.stringify(cfg)); };
+  el('delaySeconds').oninput=()=>{ const v=Math.max(0,Math.min(300,parseInt(el('delaySeconds').value)||0)); DELAY=v*1000; cfg.delay=DELAY; localStorage.setItem('stream-chat-cfg',JSON.stringify(cfg)); localStorage.setItem('sc_delaySeconds',v); };
   el('bn-mod').style.display=s?'none':'flex';
   el('auth-panel').style.display='block';
   const lbl=el('mode-lbl');
@@ -1155,6 +1161,18 @@ async function initYoutube(){
     pollYoutube();
   }catch(e){dot('d-yt','err');flashErr('YouTube init failed: '+e.message);}
 }
+let ytLastMsgTime = Date.now();
+
+function ytPollInterval(){
+  const idle = (Date.now() - ytLastMsgTime) / 1000;
+  if(idle <  60) return  6000;
+  if(idle < 120) return 10000;
+  if(idle < 240) return 15000;
+  if(idle < 600) return 20000;
+  if(idle < 900) return 25000;
+  return 30000;
+}
+
 async function pollYoutube(){
   if(!ytChatId) return;
   try{
@@ -1162,16 +1180,19 @@ async function pollYoutube(){
     const d=await(await fetch(url)).json();
     (d.items||[]).forEach(item=>{
       if(item.snippet.type!=='textMessageEvent') return;
+      ytLastMsgTime=Date.now();
       const ytIsMod=item.authorDetails.isChatModerator||item.authorDetails.isChatOwner;
-  const ytText=item.snippet.displayMessage||'';
-  const ytPingName=ytDisplayName||twDisplayName;
-  const ytPingPattern=ytPingName?new RegExp('@'+ytPingName.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i'):null;
-  if(ytIsMod&&ytPingPattern&&ytPingPattern.test(ytText)) pingMessageIds.add(item.id);
-  addMsg({id:item.id,platform:'youtube',author:item.authorDetails.displayName,
+      const ytText=item.snippet.displayMessage||'';
+      const ytPingName=ytDisplayName||twDisplayName;
+      const ytPingPattern=ytPingName?new RegExp('@'+ytPingName.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i'):null;
+      if(ytIsMod&&ytPingPattern&&ytPingPattern.test(ytText)) pingMessageIds.add(item.id);
+      addMsg({id:item.id,platform:'youtube',author:item.authorDetails.displayName,
         text:item.snippet.textMessageDetails?.messageText||'',emotesTag:'',authorId:item.authorDetails.channelId||null,color:'#ff5555',ts:Date.now()});
     });
     ytNextPage=d.nextPageToken;
-    setTimeout(pollYoutube,Math.max(d.pollingIntervalMillis||5000,3000));
+    const adaptive=ytPollInterval();
+    const ytMin=d.pollingIntervalMillis||5000;
+    setTimeout(pollYoutube, Math.max(adaptive, ytMin));
   }catch{setTimeout(pollYoutube,8000);}
 }
 
