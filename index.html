@@ -283,7 +283,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
   <div class="field field-secret"><label>Client ID</label><input id="twClientId" type="password" oninput="saveField(this)" placeholder="abc123..."></div>
 
   <div class="sec"><span class="badge b-yt">YouTube</span><span class="b-opt">optional</span></div>
-  <div class="field"><label>YouTube Channel</label><input id="ytVideoId" oninput="saveField(this)" placeholder="@channelname or channel ID"></div>
+  <div class="field"><label>YouTube Channel</label><input id="ytVideoId" oninput="saveField(this)" placeholder="@channelname, channel ID or live URL"></div>
   <div class="field field-secret"><label>OAuth Client ID</label><input id="ytClientId" type="password" oninput="saveField(this)" placeholder="123456-abc.apps.googleusercontent.com"></div>
   <div class="field field-secret"><label>Data API Key</label><input id="ytApiKey" type="password" oninput="saveField(this)" placeholder="AIza..."></div>
 
@@ -383,7 +383,6 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
   <div class="statusbar">
     <div class="si"><span class="ml s" id="mode-lbl">Streamer</span></div>
     <div class="si">Visible: <span class="cb" id="cnt-vis">0</span></div>
-    <div class="si">Deleted: <span class="cb" id="cnt-del">0</span></div>
   </div>
 </div>
 
@@ -1241,7 +1240,6 @@ function renderMessages(){
   const now=Date.now(),s=mode==='streamer';
   const toShow=s?messages.filter(m=>!deletedIds.has(m.id)&&(ownMessageIds.has(m.id)||pingMessageIds.has(m.id)||now-m.ts>=DELAY)):messages.filter(m=>!deletedIds.has(m.id)||mode==='mod');
   el('cnt-vis').textContent=toShow.filter(m=>!deletedIds.has(m.id)).length;
-  el('cnt-del').textContent=deletedIds.size;
   el('emptyState').style.display=toShow.length===0?'flex':'none';
   const rendered=new Map([...area.querySelectorAll('.msg')].map(e=>[e.dataset.id,e]));
   const showSet=new Set(toShow.map(m=>m.id));
