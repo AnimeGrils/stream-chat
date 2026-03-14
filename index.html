@@ -460,6 +460,9 @@ let sevenTVEmoteMap = new Map();
 let allEmotes = [];
 let emoteTab = 'tw';
 let emotesLoaded = false;
+let ytDisplayName = null;
+const twUserList = new Map(); // lowercase -> displayName
+const ytUserList = new Map();
 
 // ═══════ OAUTH RECOVERY ═══════
 (function recoverTokens(){
@@ -491,6 +494,8 @@ function launch(m){
   if(!twCid){alert('Enter your Twitch Client ID.');return;}
   if((!fbUrl||!fbKey)&&!confirm('Firebase not configured — deletions won\'t sync across devices. Continue?'))return;
   cfg={fbUrl,fbKey,twCh:twCh.toLowerCase(),twCid,ytKey,ytVid,ytCid,delay:delaySec?parseFloat(delaySec)*1000:6000};
+  // Seed streamer into Twitch userlist from channel name
+  if(twCh) twUserList.set(twCh.toLowerCase(), twCh);
   DELAY=cfg.delay;
   mode=m;
   sessionStorage.setItem('stream_cfg',JSON.stringify(cfg));
@@ -509,7 +514,7 @@ function initApp(){
   const savedYtName=sessionStorage.getItem('yt_display_name');
   // Restore names first so they show immediately; async fetches will overwrite with fresh data
   if(savedTwName&&savedTw){el('tw-username').textContent=savedTwName;el('tw-username').className='auth-username visible';}
-  if(savedYtName&&savedYt){el('yt-username').textContent=savedYtName;el('yt-username').className='auth-username visible';}
+  if(savedYtName&&savedYt){ytDisplayName=savedYtName;el('yt-username').textContent=savedYtName;el('yt-username').className='auth-username visible';ytUserList.set(savedYtName.toLowerCase(),savedYtName);}
   if(savedTw){twToken=savedTw;onTwitchAuthed();}
   if(savedYt){ytToken=savedYt;onYoutubeAuthed();}
   updateModeUI();
@@ -577,6 +582,7 @@ async function onTwitchAuthed(){
     sessionStorage.setItem('tw_display_name', twDisplayName);
     el('tw-username').textContent=twDisplayName;
     el('tw-username').className='auth-username visible';
+    twUserList.set(twDisplayName.toLowerCase(), twDisplayName);
     loadTwitchEmotes();
     loadTwitchBadges();
   }catch(e){console.warn('Twitch user lookup failed',e);}
@@ -609,9 +615,11 @@ function onYoutubeAuthed(){
     .then(r=>r.json()).then(d=>{
       const name=d.items?.[0]?.snippet?.title;
       if(name){
+        ytDisplayName=name;
         sessionStorage.setItem('yt_display_name', name);
         el('yt-username').textContent=name;
         el('yt-username').className='auth-username visible';
+        ytUserList.set(name.toLowerCase(),name);
       }
     }).catch(e=>console.warn('YT name fetch failed',e));
 }
@@ -703,7 +711,7 @@ function onInputKey(e){
     if(e.key==='Tab'||e.key==='Enter'){
       e.preventDefault();
       const sel=ac.querySelector('.ac-item.selected')||ac.querySelector('.ac-item');
-      if(sel){ const name=sel.querySelector('.ac-name')?.textContent; if(name) commitAc(name); return; }
+      if(sel){ const name=sel.querySelector('.ac-name')?.textContent; if(name){ if(acMode==='user') commitUserAc(name); else commitAc(name); } return; }
     }
     if(e.key==='Escape'){closeAc();return;}
   }
@@ -884,16 +892,65 @@ function insertEmote(name){
 // ═══════ AUTOCOMPLETE (:name) ═══════
 let acSelectedIndex = -1;
 
+let acMode = 'emote'; // 'emote' or 'user'
+
 function onChatInput(e){
   const val = getChatText();
   const cursor = getCaretTextOffsetSimple();
   const textToCursor = val.slice(0, cursor);
+  const mentionMatch = textToCursor.match(/@([a-zA-Z0-9_]*)$/);
   const colonMatch = textToCursor.match(/:([a-zA-Z0-9_]*)$/);
-  if(colonMatch && colonMatch[1].length >= 2){
+  if(mentionMatch && mentionMatch[1].length >= 1){
+    acMode = 'user';
+    showUserAc(mentionMatch[1]);
+  } else if(colonMatch && colonMatch[1].length >= 2){
+    acMode = 'emote';
     showAc(colonMatch[1]);
   } else {
     closeAc();
   }
+}
+
+function showUserAc(query){
+  const ac = el('acDropdown');
+  const q = query.toLowerCase();
+  const list = sendPlatform === 'youtube' ? ytUserList : twUserList;
+  const matches = [...list.values()]
+    .filter(name => name.toLowerCase().includes(q))
+    .sort((a,b) => {
+      // Prioritise starts-with over contains
+      const al = a.toLowerCase(), bl = b.toLowerCase();
+      return (al.startsWith(q)?0:1) - (bl.startsWith(q)?0:1) || al.localeCompare(bl);
+    })
+    .slice(0, 12);
+  if(matches.length === 0){ closeAc(); return; }
+  acSelectedIndex = -1;
+  ac.innerHTML = '';
+  matches.forEach((name, i) => {
+    const div = document.createElement('div');
+    div.className = 'ac-item';
+    div.dataset.idx = i;
+    div.innerHTML = `<span class="ac-user-icon">@</span><span class="ac-name">${esc(name)}</span>`;
+    div.onmousedown = (ev) => { ev.preventDefault(); commitUserAc(name); };
+    ac.appendChild(div);
+  });
+  ac.classList.add('open');
+  closeEmotePicker();
+}
+
+function commitUserAc(name){
+  const inp = el('chatInput');
+  const val = inp.value;
+  const cursor = inp.selectionStart;
+  const textToCursor = val.slice(0, cursor);
+  const atIdx = textToCursor.lastIndexOf('@');
+  if(atIdx === -1){ closeAc(); return; }
+  const after = val.slice(cursor);
+  inp.value = val.slice(0, atIdx) + '@' + name + ' ' + after;
+  const pos = atIdx + name.length + 2;
+  inp.focus();
+  inp.setSelectionRange(pos, pos);
+  closeAc();
 }
 
 function showAc(query){
@@ -1019,42 +1076,78 @@ function parseClearChat(line){
 }
 
 // ═══════ YOUTUBE ═══════
+function ytApiErr(data, fallback){
+  const code=data?.error?.errors?.[0]?.reason||data?.error?.status||'';
+  if(code==='quotaExceeded'||code==='RESOURCE_EXHAUSTED') return 'YouTube API quota exceeded — resets at midnight Pacific time. Try again tomorrow or use a new API key.';
+  if(code==='keyInvalid'||code==='API_KEY_INVALID') return 'YouTube API key is invalid. Check your Data API Key in settings.';
+  return fallback;
+}
+
 async function initYoutube(){
   dot('d-yt','spin');
   try{
-    // Step 1: resolve the input to a channel ID (handles @handle, UC... IDs, or legacy usernames)
-    let channelId=null;
     const raw=(cfg.ytVid||'').trim();
+    let channelId=null;
+    let directVideoId=null;
 
+    // Check if input is a YouTube video URL — extract video ID directly
+    const urlVideoMatch=raw.match(/(?:youtube\.com\/watch\?.*v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+    if(urlVideoMatch){
+      directVideoId=urlVideoMatch[1];
+    }
+
+    // If we have a direct video ID, skip straight to step 3 (costs only 1 unit)
+    if(directVideoId){
+      const vr=await fetch(`https://www.googleapis.com/youtube/v3/videos?part=liveStreamingDetails&id=${directVideoId}&key=${cfg.ytKey}`);
+      const vd=await vr.json();
+      if(vd.error){dot('d-yt','err');flashErr(ytApiErr(vd,'YouTube: video lookup failed — '+(vd.error.message||vd.error.status)));return;}
+      ytChatId=vd.items?.[0]?.liveStreamingDetails?.activeLiveChatId||null;
+      if(!ytChatId){dot('d-yt','err');flashErr('YouTube: video found but live chat is not active. Is the stream live?');return;}
+      dot('d-yt','ok');
+      updateSendUI();
+      pollYoutube();
+      return;
+    }
+
+    // Use UC... ID directly, or check session cache to avoid burning quota on every open
+    const cacheKey='yt_channel_id_'+raw;
     if(/^UC[a-zA-Z0-9_-]{20,}$/.test(raw)){
-      // Already a channel ID
       channelId=raw;
     } else {
-      // Try forHandle (works for @handle with or without the @)
+      channelId=sessionStorage.getItem(cacheKey)||null;
+    }
+
+    if(!channelId){
+      // Step 1a: try forHandle
       const handle=raw.startsWith('@')?raw:'@'+raw;
       const hr=await fetch(`https://www.googleapis.com/youtube/v3/channels?part=id&forHandle=${encodeURIComponent(handle)}&key=${cfg.ytKey}`);
       const hd=await hr.json();
+      if(hd.error){dot('d-yt','err');flashErr(ytApiErr(hd,'YouTube: channel lookup failed — '+( hd.error.message||hd.error.status)));return;}
       channelId=hd.items?.[0]?.id||null;
 
       if(!channelId){
-        // Fallback: legacy forUsername
+        // Step 1b: legacy forUsername fallback
         const ur=await fetch(`https://www.googleapis.com/youtube/v3/channels?part=id&forUsername=${encodeURIComponent(raw.replace(/^@/,''))}&key=${cfg.ytKey}`);
         const ud=await ur.json();
+        if(ud.error){dot('d-yt','err');flashErr(ytApiErr(ud,'YouTube: channel lookup failed — '+(ud.error.message||ud.error.status)));return;}
         channelId=ud.items?.[0]?.id||null;
       }
+
+      if(!channelId){dot('d-yt','err');flashErr('YouTube: channel not found. Check the channel name.');return;}
+      sessionStorage.setItem(cacheKey, channelId); // cache to save quota
     }
 
-    if(!channelId){dot('d-yt','err');flashErr('YouTube: channel not found. Check the channel name.');return;}
-
-    // Step 2: find the active live broadcast for this channel
+    // Step 2: find the active live broadcast
     const sr=await fetch(`https://www.googleapis.com/youtube/v3/search?part=id&channelId=${channelId}&eventType=live&type=video&key=${cfg.ytKey}`);
     const sd=await sr.json();
+    if(sd.error){dot('d-yt','err');flashErr(ytApiErr(sd,'YouTube: live search failed — '+(sd.error.message||sd.error.status)));return;}
     const videoId=sd.items?.[0]?.id?.videoId||null;
     if(!videoId){dot('d-yt','err');flashErr('YouTube: no active live stream found for this channel.');return;}
 
-    // Step 3: get the live chat ID from the video
+    // Step 3: get the live chat ID
     const vr=await fetch(`https://www.googleapis.com/youtube/v3/videos?part=liveStreamingDetails&id=${videoId}&key=${cfg.ytKey}`);
     const vd=await vr.json();
+    if(vd.error){dot('d-yt','err');flashErr(ytApiErr(vd,'YouTube: video lookup failed — '+(vd.error.message||vd.error.status)));return;}
     ytChatId=vd.items?.[0]?.liveStreamingDetails?.activeLiveChatId||null;
     if(!ytChatId){dot('d-yt','err');flashErr('YouTube: stream found but live chat is disabled.');return;}
 
@@ -1072,7 +1165,8 @@ async function pollYoutube(){
       if(item.snippet.type!=='textMessageEvent') return;
       const ytIsMod=item.authorDetails.isChatModerator||item.authorDetails.isChatOwner;
   const ytText=item.snippet.displayMessage||'';
-  const ytPingPattern=twDisplayName?new RegExp('@'+twDisplayName.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i'):null;
+  const ytPingName=ytDisplayName||twDisplayName;
+  const ytPingPattern=ytPingName?new RegExp('@'+ytPingName.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i'):null;
   if(ytIsMod&&ytPingPattern&&ytPingPattern.test(ytText)) pingMessageIds.add(item.id);
   addMsg({id:item.id,platform:'youtube',author:item.authorDetails.displayName,
         text:item.snippet.textMessageDetails?.messageText||'',emotesTag:'',authorId:item.authorDetails.channelId||null,color:'#ff5555',ts:Date.now()});
@@ -1088,6 +1182,9 @@ function addMsg(msg){
   messages.push(msg);
   msgMap.set(msg.id, msg);
   if(messages.length>400) messages=messages.slice(-400);
+  // Track usernames for @ autocomplete
+  if(msg.platform==='twitch'&&msg.author) twUserList.set(msg.author.toLowerCase(),msg.author);
+  if(msg.platform==='youtube'&&msg.author) ytUserList.set(msg.author.toLowerCase(),msg.author);
   renderMessages();
 }
 
@@ -1790,6 +1887,7 @@ function logoutYoutube(){
   el('auth-yt-btn').textContent='Login with Google';
   el('auth-yt-btn').onclick=loginYoutube;
   el('logout-yt-btn').className='logout-btn';
+  ytDisplayName=null;
   el('yt-username').className='auth-username';
   sessionStorage.removeItem('yt_display_name');
   updateSendUI();
@@ -1803,7 +1901,7 @@ function dot(id,s){const e=el(id);if(!e)return;e.className='dc'+(s==='ok'?' ok':
 function setBtn(btn,c,text){if(!btn)return;btn.className='mod-btn del'+(c?' '+c:'');btn.textContent=text;btn.disabled=c==='pending';}
 let errTimer=null;
 function flashSuccess(msg){const b=el('bn-err');b.style.color='var(--green)';b.textContent='✓ '+msg;b.style.display='flex';clearTimeout(errTimer);errTimer=setTimeout(()=>{b.style.display='none';b.style.color='';},3000);}
-function flashErr(msg){const b=el('bn-err');b.textContent='⚠ '+msg;b.style.display='flex';clearTimeout(errTimer);errTimer=setTimeout(()=>{b.style.display='none';},5000);}
+function flashErr(msg){const b=el('bn-err');const clean=String(msg).replace(/<[^>]*>/g,'');b.textContent='⚠ '+clean;b.style.display='flex';clearTimeout(errTimer);errTimer=setTimeout(()=>{b.style.display='none';},5000);}
 function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function safeUrl(u){return(typeof u==='string'&&/^https:\/\//.test(u))?u:'';}
 function linkify(text){
