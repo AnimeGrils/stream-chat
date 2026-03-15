@@ -1,0 +1,2118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stream Chat</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0b0b12;--surface:#13131f;--surface2:#1a1a2a;--surface3:#22223a;
+  --border:#2a2a45;--text:#e8e8f0;--muted:#7070a0;
+  --twitch:#9146ff;--twitch-dim:#4a2880;
+  --youtube:#ff4444;--youtube-dim:#882222;
+  --del:#ff6b6b;--green:#22dd88;--amber:#ffaa44;
+  --font:'Inter',sans-serif;--mono:'IBM Plex Mono',monospace;
+}
+body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:100vh;display:flex;flex-direction:column}
+
+/* ── SETUP ── */
+#setup{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:2rem;position:fixed;inset:0;z-index:10;background:var(--bg)}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:2.5rem;width:100%;max-width:480px}
+.card h1{font-size:22px;font-weight:600;margin-bottom:4px}
+.card .sub{color:var(--muted);font-size:13px;margin-bottom:2rem}
+.sec{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin:1.6rem 0 1rem;padding-bottom:8px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
+.badge{display:inline-flex;align-items:center;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;padding:3px 8px;border-radius:4px}
+.b-tw{background:var(--twitch-dim);color:var(--twitch)}
+.b-yt{background:var(--youtube-dim);color:var(--youtube)}
+.b-fb{background:rgba(255,170,68,.18);color:var(--amber)}
+.b-opt{font-size:10px;color:var(--muted)}
+.field{margin-bottom:1rem}
+.field label{display:block;font-size:12px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
+.field input{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;color:var(--text);font-family:var(--mono);font-size:13px;outline:none;transition:border-color .15s}
+.field input:focus{border-color:var(--twitch)}
+.field input::placeholder{color:var(--muted)}
+.btn-row{display:flex;gap:10px;margin-top:1.8rem}
+.btn{padding:10px 20px;border-radius:8px;font-family:var(--font);font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all .15s;flex:1}
+.btn-str{background:var(--twitch);color:#fff}.btn-str:hover{filter:brightness(1.15)}
+.btn-mod{background:var(--surface3);color:var(--text);border:1px solid var(--border)}.btn-mod:hover{background:var(--surface2)}
+
+/* ── APP ── */
+#app{display:none;flex-direction:column;height:100vh;overflow:hidden}
+.topbar{display:flex;align-items:center;gap:10px;padding:9px 14px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0}
+.mode-pill{display:flex;gap:1px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:2px}
+.mode-btn{padding:5px 13px;border-radius:4px;font-size:12px;font-weight:600;cursor:pointer;border:none;background:transparent;color:var(--muted);font-family:var(--font);letter-spacing:.04em;transition:all .15s}
+.mode-btn.as{background:var(--twitch);color:#fff}
+.mode-btn.am{background:rgba(255,68,68,.22);color:var(--youtube)}
+.dots{display:flex;gap:10px;margin-left:auto;align-items:center}
+.dot{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted)}
+.dc{width:7px;height:7px;border-radius:50%;background:var(--border);flex-shrink:0}
+.dc.ok{background:var(--green);box-shadow:0 0 5px var(--green)}
+.dc.spin{background:var(--amber);animation:pulse 1s infinite}
+.dc.err{background:var(--del)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+.update-banner{display:none;position:fixed;bottom:16px;right:16px;background:var(--surface);border:1px solid var(--twitch);border-radius:8px;padding:12px 16px;z-index:9999;max-width:320px;box-shadow:0 4px 16px rgba(0,0,0,.4)}
+.update-banner.visible{display:block}
+.update-banner-title{font-weight:600;font-size:13px;color:var(--twitch);margin-bottom:4px}
+.update-banner-body{font-size:12px;color:var(--muted);margin-bottom:10px}
+.update-banner-btns{display:flex;gap:8px}
+.update-banner-btns button{flex:1;font-size:11px;padding:5px 0;border-radius:4px;cursor:pointer;font-family:var(--font);font-weight:600;border:1px solid var(--border)}
+.ub-install{background:var(--twitch);color:#fff;border-color:var(--twitch)!important}
+.ub-dismiss{background:transparent;color:var(--muted)}
+.settings-btn{background:transparent;border:1px solid var(--border);color:var(--muted);padding:4px 9px;border-radius:5px;font-size:11px;font-weight:600;cursor:pointer;font-family:var(--font);transition:all .12s;margin-left:auto}
+.settings-btn:hover{border-color:var(--twitch);color:var(--text)}
+.delay-badge{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:2px 4px 2px 8px;font-family:var(--mono)}
+.delay-input{width:36px;background:transparent;border:none;border-bottom:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:11px;text-align:center;padding:0 2px;outline:none;-moz-appearance:textfield}
+.delay-input::-webkit-inner-spin-button{-webkit-appearance:none}
+.delay-input:focus{border-bottom-color:var(--twitch)}
+
+.auth-panel{background:var(--surface);border-bottom:1px solid var(--border);padding:10px 14px;flex-shrink:0}
+.auth-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.auth-label{font-size:12px;color:var(--muted);flex-shrink:0}
+.auth-btn{display:flex;align-items:center;gap:6px;padding:5px 11px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid;transition:all .15s;font-family:var(--font)}
+.auth-tw{background:rgba(145,70,255,.12);border-color:rgba(145,70,255,.3);color:var(--twitch)}.auth-tw:hover{background:rgba(145,70,255,.22)}
+.auth-tw.authed{background:rgba(34,221,136,.1);border-color:rgba(34,221,136,.3);color:var(--green);cursor:default}
+.auth-yt{background:rgba(255,68,68,.12);border-color:rgba(255,68,68,.3);color:var(--youtube)}.auth-yt:hover{background:rgba(255,68,68,.22)}
+.auth-yt.authed{background:rgba(34,221,136,.1);border-color:rgba(34,221,136,.3);color:var(--green);cursor:default}
+.logout-btn{background:transparent;border:1px solid var(--border);color:var(--muted);padding:4px 8px;border-radius:5px;font-size:10px;font-weight:600;cursor:pointer;font-family:var(--font);transition:all .12s;display:none}
+.auth-username{font-size:11px;color:var(--muted);font-family:var(--mono);display:none}
+.auth-username.visible{display:inline}
+.logout-btn:hover{border-color:var(--del);color:var(--del)}
+.logout-btn.visible{display:inline-flex}
+
+.banner{display:flex;align-items:center;gap:8px;padding:7px 14px;font-size:12px;flex-shrink:0;line-height:1.5}
+.bn-mod{background:rgba(255,68,68,.06);border-bottom:1px solid rgba(255,68,68,.14);color:rgba(255,110,110,.9)}
+.bn-warn{background:rgba(255,170,68,.07);border-bottom:1px solid rgba(255,170,68,.15);color:rgba(255,180,80,.85)}
+.bn-err{background:rgba(255,68,68,.04);border-bottom:1px solid rgba(255,68,68,.1);color:rgba(200,120,120,.8)}
+
+/* ── CHAT AREA ── */
+.chat-area{flex:1;overflow-y:auto;padding:8px 0}
+.chat-area::-webkit-scrollbar{width:4px}
+.chat-area::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.msg{display:flex;align-items:baseline;gap:8px;padding:3px 14px;font-size:13px;line-height:1.6;border-left:2px solid transparent;transition:background .1s}
+.msg:hover{background:var(--surface2)}
+.msg.tw{border-left-color:var(--twitch)}
+.msg.yt{border-left-color:var(--youtube)}
+.msg-time{font-size:10px;color:var(--muted);flex-shrink:0;font-family:var(--mono)}
+.msg-badges{display:inline-flex;align-items:center;gap:2px;vertical-align:middle;margin-right:4px;flex-shrink:0}
+.msg-badge{width:18px;height:18px;object-fit:contain;vertical-align:middle;border-radius:2px}
+.msg-body{flex:1;min-width:0;word-break:break-word}
+.msg-author{font-weight:700;margin-right:4px;cursor:pointer}.msg-author:hover{text-decoration:underline}
+.msg-sep{color:var(--muted);margin-right:4px;font-weight:400}
+.msg-text{color:rgba(232,232,240,.82)}
+.emote{height:24px;width:auto;vertical-align:middle;margin:0 1px}
+.msg-actions{flex-shrink:0;opacity:0;transition:opacity .1s;display:flex;gap:4px}
+.msg:hover .msg-actions{opacity:1}
+.msg.msg-deleted{opacity:.45}
+.msg.msg-deleted .msg-text{text-decoration:line-through}
+.msg.msg-ping{background:rgba(255,170,68,.22)}
+.msg-text a.chat-link{color:var(--twitch);text-decoration:underline;text-underline-offset:2px;word-break:break-all}
+.msg-text a.chat-link:hover{color:var(--text)}
+.msg.yt .msg-text a.chat-link{color:var(--youtube)}
+.msg-reply-bar{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);opacity:.75;padding:1px 0 1px 2px;cursor:pointer;white-space:nowrap;overflow:hidden;max-width:100%;line-height:1.4}
+.msg-reply-bar:hover{opacity:1;color:var(--text)}
+.msg-reply-bar::before{content:'↵';font-size:12px;flex-shrink:0;margin-right:1px}
+.msg-reply-author{font-weight:600;flex-shrink:0}
+.msg-reply-text{overflow:hidden;text-overflow:ellipsis;min-width:0}
+.msg.reply-highlight{animation:replyflash .9s ease-out}
+@keyframes replyflash{0%,30%{background:rgba(145,70,255,.28)}100%{background:transparent}}
+.reply-indicator{display:flex;align-items:center;gap:5px;padding:2px 14px 0;font-size:11px;color:var(--twitch);background:rgba(145,70,255,.07);border-left:2px solid var(--twitch)}
+.reply-indicator span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted)}
+.reply-cancel{background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;padding:0 2px;line-height:1}
+.reply-cancel:hover{color:var(--del)}
+.ctx-menu{position:fixed;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:4px 0;z-index:900;min-width:200px;box-shadow:0 4px 16px rgba(0,0,0,.4)}
+.ctx-item{padding:7px 14px;font-size:12px;cursor:pointer;color:var(--text);transition:background .1s}
+.ctx-item:hover{background:var(--surface2)}
+.ctx-item.danger{color:var(--del)}
+.ctx-sep{height:1px;background:var(--border);margin:3px 0}
+.ctx-preview{padding:5px 14px 8px;font-size:11px;color:var(--muted);font-family:var(--mono);max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.del-btn{background:rgba(255,107,107,.12);border:1px solid rgba(255,107,107,.28);color:var(--del);font-size:10px;font-weight:600;padding:3px 8px;border-radius:4px;cursor:pointer;font-family:var(--font);transition:all .12s}
+.del-btn:hover{background:rgba(255,107,107,.28)}
+.del-btn:disabled{background:transparent;border-color:transparent;color:var(--muted);cursor:default;font-style:italic}
+.del-btn.pending{color:var(--amber);border-color:rgba(255,170,68,.3);background:rgba(255,170,68,.1);cursor:wait}
+/* ── MOD ACTIONS ── */
+.mod-btn{font-size:10px;font-weight:600;padding:3px 7px;border-radius:4px;cursor:pointer;font-family:var(--font);transition:all .12s;border:1px solid}
+.mod-btn.del{background:rgba(255,107,107,.12);border-color:rgba(255,107,107,.28);color:var(--del)}.mod-btn.del:hover{background:rgba(255,107,107,.28)}
+.mod-btn.del:disabled{background:transparent;border-color:transparent;color:var(--muted);cursor:default;font-style:italic}
+.mod-btn.del.pending{color:var(--amber);border-color:rgba(255,170,68,.3);background:rgba(255,170,68,.1);cursor:wait}
+.mod-btn.to{background:rgba(255,170,68,.1);border-color:rgba(255,170,68,.3);color:var(--amber)}.mod-btn.to:hover{background:rgba(255,170,68,.22)}
+.mod-btn.ban{background:rgba(255,68,68,.1);border-color:rgba(255,68,68,.3);color:var(--youtube)}.mod-btn.ban:hover{background:rgba(255,68,68,.22)}
+.mod-btn.warn{background:rgba(145,70,255,.1);border-color:rgba(145,70,255,.3);color:var(--twitch)}.mod-btn.warn:hover{background:rgba(145,70,255,.22)}
+.mod-btn.unban{background:rgba(34,221,136,.1);border-color:rgba(34,221,136,.3);color:var(--green)}.mod-btn.unban:hover{background:rgba(34,221,136,.22)}
+
+/* ── MODAL ── */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center;z-index:1000;display:none}
+.modal-overlay.open{display:flex}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1.5rem;width:100%;max-width:360px;display:flex;flex-direction:column;gap:14px}
+.modal h3{font-size:15px;font-weight:600}
+.modal .modal-sub{font-size:12px;color:var(--muted)}
+.modal label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);display:block;margin-bottom:5px}
+.modal input[type=text],.modal textarea{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:8px 11px;color:var(--text);font-family:var(--mono);font-size:13px;outline:none;transition:border-color .15s}
+.modal input[type=text]:focus,.modal textarea:focus{border-color:var(--twitch)}
+.modal textarea{resize:none;height:60px}
+.modal-slider-row{display:flex;align-items:center;gap:10px}
+.modal-slider-row input[type=range]{flex:1;accent-color:var(--twitch)}
+.modal-slider-val{font-family:var(--mono);font-size:13px;color:var(--text);min-width:70px;text-align:right}
+.to-snaps{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+.to-snap{background:var(--surface2);border:1px solid var(--border);border-radius:4px;font-size:11px;padding:3px 8px;cursor:pointer;font-family:var(--mono);color:var(--muted);transition:all .12s}
+.to-snap:hover{border-color:var(--twitch);color:var(--text)}
+.to-snap.active{background:rgba(145,70,255,.15);border-color:var(--twitch);color:var(--twitch)}
+.to-input{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--mono);font-size:12px;outline:none;width:90px;transition:border-color .15s}
+.to-input:focus{border-color:var(--twitch)}
+.modal-btns{display:flex;gap:8px;justify-content:flex-end}
+.modal-cancel{background:transparent;border:1px solid var(--border);color:var(--muted);padding:7px 16px;border-radius:7px;font-family:var(--font);font-size:13px;font-weight:600;cursor:pointer;transition:all .12s}.modal-cancel:hover{border-color:var(--muted);color:var(--text)}
+.modal-confirm{border:none;padding:7px 16px;border-radius:7px;font-family:var(--font);font-size:13px;font-weight:600;cursor:pointer;transition:all .12s}
+.modal-confirm.ban{background:var(--youtube);color:#fff}.modal-confirm.ban:hover{filter:brightness(1.1)}
+.modal-confirm.to{background:var(--amber);color:#000}.modal-confirm.to:hover{filter:brightness(1.1)}
+.modal-confirm.warn{background:var(--twitch);color:#fff}.modal-confirm.warn:hover{filter:brightness(1.1)}
+
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:10px;color:var(--muted)}
+
+/* ── EMOTE PICKER ── */
+.emote-picker{position:absolute;bottom:100%;left:0;right:0;background:var(--surface);border:1px solid var(--border);border-radius:10px 10px 0 0;max-height:280px;display:none;flex-direction:column;overflow:hidden;z-index:100}
+.emote-picker.open{display:flex}
+.emote-search{padding:8px 10px;border-bottom:1px solid var(--border);flex-shrink:0}
+.emote-search input{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--mono);font-size:12px;outline:none}
+.emote-search input:focus{border-color:var(--twitch)}
+
+
+
+.emote-grid{flex:1;overflow-y:auto;padding:8px;display:flex;flex-wrap:wrap;gap:4px;align-content:flex-start}
+.emote-grid::-webkit-scrollbar{width:3px}
+.emote-grid::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.ep-item{width:36px;height:36px;display:flex;align-items:center;justify-content:center;cursor:pointer;border-radius:4px;transition:background .1s;position:relative}
+.ep-item:hover{background:var(--surface3)}
+.ep-item img{max-width:28px;max-height:28px;object-fit:contain}
+.ep-item .ep-tip{display:none;position:absolute;bottom:calc(100% + 4px);left:50%;transform:translateX(-50%);background:var(--surface3);border:1px solid var(--border);border-radius:4px;padding:2px 6px;font-size:10px;white-space:nowrap;pointer-events:none;z-index:10}
+.ep-item:hover .ep-tip{display:block}
+.emote-loading{padding:20px;text-align:center;color:var(--muted);font-size:12px;width:100%}
+
+/* ── AUTOCOMPLETE ── */
+.ac-dropdown{position:absolute;bottom:100%;left:0;right:0;background:var(--surface);border:1px solid var(--border);border-radius:8px 8px 0 0;max-height:200px;overflow-y:auto;display:none;z-index:200;padding:4px 0;}
+.ac-dropdown.open{display:block}
+.ac-item{display:flex;align-items:center;gap:10px;padding:5px 12px;cursor:pointer;font-size:13px;font-family:var(--mono);transition:background .1s}
+.ac-item:hover,.ac-item.selected{background:var(--surface2)}
+.ac-item img{width:24px;height:24px;object-fit:contain;flex-shrink:0}
+.ac-name{color:var(--text)}
+.ac-src{font-size:10px;color:var(--muted);margin-left:auto}
+
+/* ── CHAT INPUT ── */
+.chat-input-wrap{position:relative;flex-shrink:0}
+.scroll-to-bottom{position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:5px 14px;font-size:12px;color:var(--muted);cursor:pointer;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.3);transition:all .15s;opacity:0;pointer-events:none;display:flex;align-items:center;gap:6px;font-family:var(--font);z-index:10}
+.scroll-to-bottom.visible{opacity:1;pointer-events:auto}
+.scroll-to-bottom:hover{background:var(--surface2);color:var(--text);border-color:var(--twitch)}
+.scroll-to-bottom .stb-hover{display:none}
+.scroll-to-bottom .stb-idle{display:flex;align-items:center;gap:6px}
+.scroll-to-bottom:hover .stb-hover{display:flex;align-items:center;gap:6px}
+.scroll-to-bottom:hover .stb-idle{display:none}
+.chat-input-bar{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--surface);border-top:1px solid var(--border)}
+.platform-toggle{display:flex;gap:1px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:2px;flex-shrink:0}
+.pt-btn{padding:4px 8px;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer;border:none;background:transparent;color:var(--muted);font-family:var(--font);transition:all .12s}
+.pt-btn.tw-active{background:var(--twitch);color:#fff}
+.pt-btn.yt-active{background:var(--youtube-dim);color:var(--youtube)}
+.chat-input{flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:6px 12px;color:var(--text);font-family:var(--mono);font-size:13px;outline:none;transition:border-color .15s;height:36px;box-sizing:border-box}
+.chat-input:focus{border-color:var(--twitch)}
+.emote-toggle-btn{background:var(--surface2);border:1px solid var(--border);border-radius:6px;width:34px;height:34px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;transition:all .12s;flex-shrink:0}
+.emote-toggle-btn:hover{background:var(--surface3);border-color:var(--muted)}
+.emote-toggle-btn.active{border-color:var(--twitch);background:rgba(145,70,255,.12)}
+.send-btn{background:var(--twitch);color:#fff;border:none;border-radius:6px;padding:0 14px;height:34px;font-family:var(--font);font-size:13px;font-weight:600;cursor:pointer;flex-shrink:0;transition:all .12s}
+.send-btn:hover{filter:brightness(1.12)}
+.send-btn:disabled{opacity:.4;cursor:default}
+.send-btn.yt-send{background:var(--youtube)}
+
+
+/* ── PROFILE PANEL ── */
+.profile-panel{position:fixed;top:0;right:-420px;width:380px;height:100vh;background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column;z-index:500;transition:right .25s cubic-bezier(.4,0,.2,1);overflow:hidden}
+.profile-panel.open{right:0}
+.pp-header{display:flex;align-items:flex-start;gap:14px;padding:18px 16px 14px;border-bottom:1px solid var(--border);flex-shrink:0;position:relative}
+.pp-close{position:absolute;top:12px;right:12px;background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:18px;line-height:1;padding:4px}
+.pp-close:hover{color:var(--text)}
+.pp-avatar{width:56px;height:56px;border-radius:50%;object-fit:cover;flex-shrink:0;background:var(--surface2)}
+.pp-avatar-placeholder{width:56px;height:56px;border-radius:50%;background:var(--surface3);display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:600;flex-shrink:0}
+.pp-info{flex:1;min-width:0}
+.pp-name{font-size:16px;font-weight:600;margin-bottom:2px;display:flex;align-items:center;gap:6px}
+.pp-platform{font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:2px 5px;border-radius:3px}
+.pp-platform.tw{background:var(--twitch-dim);color:var(--twitch)}
+.pp-platform.yt{background:var(--youtube-dim);color:var(--youtube)}
+.pp-sub{font-size:12px;color:var(--muted);margin-bottom:8px}
+.pp-tags{display:flex;gap:5px;flex-wrap:wrap}
+.pp-tag{font-size:10px;font-weight:600;padding:2px 7px;border-radius:3px;background:var(--surface2);color:var(--muted);border:1px solid var(--border)}
+.pp-tag.mod{background:rgba(34,221,136,.1);border-color:rgba(34,221,136,.3);color:var(--green)}
+.pp-tag.sub{background:rgba(145,70,255,.12);border-color:rgba(145,70,255,.3);color:var(--twitch)}
+.pp-tag.partner{background:rgba(255,170,68,.1);border-color:rgba(255,170,68,.3);color:var(--amber)}
+.pp-tag.ban{background:rgba(255,68,68,.15);border-color:rgba(255,68,68,.35);color:var(--del)}
+.pp-body{flex:1;overflow-y:auto;padding:14px 16px;display:flex;flex-direction:column;gap:16px}
+.pp-body::-webkit-scrollbar{width:4px}
+.pp-body::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.pp-section-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:8px}
+.pp-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.pp-stat{background:var(--surface2);border-radius:7px;padding:9px 11px}
+.pp-stat-val{font-size:15px;font-weight:600;font-family:var(--mono)}
+.pp-stat-lbl{font-size:10px;color:var(--muted);margin-top:2px}
+.pp-history{display:flex;flex-direction:column;gap:4px;max-height:200px;overflow-y:auto;padding-right:2px}
+.pp-history::-webkit-scrollbar{width:3px}
+.pp-history::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.pp-hist-msg{font-size:12px;font-family:var(--mono);padding:5px 8px;background:var(--surface2);border-radius:5px;color:rgba(232,232,240,.8);line-height:1.45;border-left:2px solid var(--border)}
+.pp-hist-msg.deleted-hist{opacity:.4;text-decoration:line-through}
+.pp-mod-actions{display:flex;flex-direction:column;gap:7px}
+.pp-mod-row{display:flex;gap:7px}
+.pp-mod-btn{flex:1;padding:8px;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid;font-family:var(--font);transition:all .12s;text-align:center}
+.pp-mod-btn.del{background:rgba(255,107,107,.1);border-color:rgba(255,107,107,.28);color:var(--del)}.pp-mod-btn.del:hover{background:rgba(255,107,107,.22)}
+.pp-mod-btn.to{background:rgba(255,170,68,.1);border-color:rgba(255,170,68,.3);color:var(--amber)}.pp-mod-btn.to:hover{background:rgba(255,170,68,.22)}
+.pp-mod-btn.ban{background:rgba(255,68,68,.1);border-color:rgba(255,68,68,.3);color:var(--youtube)}.pp-mod-btn.ban:hover{background:rgba(255,68,68,.22)}
+.pp-mod-btn.warn{background:rgba(145,70,255,.1);border-color:rgba(145,70,255,.3);color:var(--twitch)}.pp-mod-btn.warn:hover{background:rgba(145,70,255,.22)}
+.pp-mod-btn.unban{background:rgba(34,221,136,.1);border-color:rgba(34,221,136,.3);color:var(--green)}.pp-mod-btn.unban:hover{background:rgba(34,221,136,.22)}
+.pp-loading{color:var(--muted);font-size:12px;text-align:center;padding:20px 0}
+.pp-ext-link{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--twitch);text-decoration:none;margin-top:2px}.pp-ext-link:hover{text-decoration:underline}
+
+
+/* ── STATUSBAR ── */
+.statusbar{padding:5px 14px;background:var(--surface);border-top:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;gap:12px}
+.si{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:5px}
+.cb{background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:1px 6px;font-family:var(--mono);font-size:10px;color:var(--text)}
+.ml{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:3px 9px;border-radius:4px}
+.ml.s{background:rgba(145,70,255,.15);color:var(--twitch)}
+.ml.m{background:rgba(255,68,68,.15);color:var(--youtube)}
+</style>
+</head>
+<body>
+
+<!-- ═══ SETUP ═══ -->
+<div id="setup">
+<div class="card">
+  <h1>Stream Chat</h1>
+  <p class="sub">Combined Twitch + YouTube chat for streamers and mods</p>
+
+  <div class="sec"><span class="badge b-fb">Database</span></div>
+  <div class="field field-secret"><label>Database URL</label><input id="fbUrl" type="password" oninput="saveField(this)" placeholder="https://your-project-default-rtdb.firebaseio.com"><button type="button" class="eye-btn" onclick="toggleSecret(this)" title="Show/hide"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+  <div class="field field-secret"><label>API Key</label><input id="fbKey" type="password" oninput="saveField(this)" placeholder="AIza..."><button type="button" class="eye-btn" onclick="toggleSecret(this)" title="Show/hide"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+
+  <div class="sec"><span class="badge b-tw">Twitch</span></div>
+  <div class="field"><label>Channel Name</label><input id="twChannel" oninput="saveField(this)" placeholder="channel_name"></div>
+  <div class="field field-secret"><label>Client ID</label><input id="twClientId2" type="password" oninput="saveField(this)" placeholder="From dev.twitch.tv/console/apps"><button type="button" class="eye-btn" onclick="toggleSecret(this)" title="Show/hide"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+  <div class="field" style="margin-top:-4px">
+    <button class="btn" style="width:100%;background:var(--twitch);color:#fff;font-size:12px;padding:7px 0" onclick="getTwitchToken()">Get Twitch Token</button>
+  </div>
+  <div class="field field-secret"><label>Twitch Token</label><input id="twClientId" type="password" oninput="saveField(this)" onpaste="extractTwitchToken(event)" placeholder="Click above to generate, or paste manually"><button type="button" class="eye-btn" onclick="toggleSecret(this)" title="Show/hide"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+
+  <div class="sec"><span class="badge b-yt">YouTube</span><span class="b-opt">optional</span></div>
+  <div class="field"><label>YouTube Channel</label><input id="ytVideoId" oninput="saveField(this)" placeholder="@channelname, channel ID or live URL"></div>
+
+  <div class="sec" style="margin-top:8px"><span style="font-size:11px;color:var(--muted);font-weight:600;letter-spacing:.05em">APP</span></div>
+  <div class="field" style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+    <label style="margin:0">Auto-check for updates</label>
+    <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+      <input type="checkbox" id="autoUpdateToggle" onchange="setAutoUpdate(this.checked)" style="width:16px;height:16px;cursor:pointer">
+      <span id="autoUpdateLabel" style="font-size:11px;color:var(--muted)">On</span>
+    </label>
+  </div>
+  <div class="field" style="margin-top:-4px">
+    <button class="btn" style="width:100%;background:var(--twitch);color:#fff;font-size:12px;padding:7px 0" onclick="manualCheckUpdate()" id="checkUpdateBtn">Check for Updates</button>
+    <div id="updateStatusMsg" style="font-size:11px;color:var(--muted);margin-top:4px;text-align:center;min-height:16px"></div>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn btn-str" onclick="launch('streamer')">Open as Streamer</button>
+    <button class="btn btn-mod" onclick="launch('mod')">Open as Mod</button>
+  </div>
+</div>
+</div>
+
+<!-- ═══ APP ═══ -->
+<div id="app">
+  <div class="topbar">
+    <div class="mode-pill">
+      <button class="mode-btn" id="tab-s" onclick="switchMode('streamer')">Streamer</button>
+      <button class="mode-btn" id="tab-m" onclick="switchMode('mod')">Mod</button>
+    </div>
+    <div id="delay-badge" class="delay-badge" style="display:none">⏱ <input class="delay-input" id="delaySeconds" type="number" min="0" max="300" value="6" title="Streamer delay (seconds)">s delay</div>
+    <button class="settings-btn" onclick="goToSettings()" title="Back to settings">⚙ Settings</button>
+    <div class="dots">
+      <div class="dot"><div class="dc" id="d-tw"></div>Twitch</div>
+      <div class="dot"><div class="dc" id="d-yt"></div>YouTube</div>
+      <div class="dot"><div class="dc" id="d-fb"></div>Firebase</div>
+    </div>
+  </div>
+
+  <div class="auth-panel" id="auth-panel">
+    <div class="auth-row">
+      <span class="auth-label">Log in to send &amp; delete:</span>
+      <span class="auth-username" id="tw-username" style="font-size:12px"></span>
+      <button class="auth-btn auth-yt" id="auth-yt-btn" onclick="connectYoutube()">Connect YouTube</button>
+      <span class="auth-username" id="yt-username"></span>
+      <button class="logout-btn" id="logout-yt-btn" onclick="disconnectYoutube()">disconnect</button>
+    </div>
+  </div>
+
+  <div id="bn-mod"   class="banner bn-mod"  style="display:none">⚡ Mod view — messages are instant.</div>
+  <div id="bn-noyt"  class="banner bn-warn" style="display:none">YouTube not configured — Twitch only.</div>
+  <div id="bn-fbw"   class="banner bn-err"  style="display:none">Firebase not connected — deletions won't sync across devices.</div>
+  <div id="bn-err"   class="banner bn-err"  style="display:none"></div>
+
+  <div class="chat-area" id="chatArea">
+    <div class="empty" id="emptyState">
+      <div style="font-size:28px;opacity:.3">💬</div>
+      <p style="font-size:13px">Waiting for messages…</p>
+    </div>
+  </div>
+
+  <!-- Chat input -->
+  <div class="chat-input-wrap" id="chatInputWrap">
+    <div class="emote-picker" id="emotePicker">
+      <div class="emote-search"><input type="text" id="emoteSearch" placeholder="Search emotes…" oninput="filterEmotes()" placeholder="Search emotes (Twitch + 7TV)…"></div>
+      <div class="emote-grid" id="emoteGrid"><div class="emote-loading">Loading emotes…</div></div>
+    </div>
+    <div class="ac-dropdown" id="acDropdown"></div>
+    <button class="scroll-to-bottom" id="scrollToBottomBtn" onclick="scrollToBottom()">
+      <span class="stb-idle">⏸ Chat paused due to scroll</span>
+      <span class="stb-hover">↓ See new messages</span>
+    </button>
+    <div id="replyIndicator" style="display:none" class="reply-indicator"><span id="replyIndicatorText"></span><button class="reply-cancel" onclick="cancelReply()" title="Cancel reply">✕</button></div>
+    <div class="chat-input-bar">
+      <div class="platform-toggle" id="platToggle">
+        <button class="pt-btn tw-active" id="pt-tw" onclick="setPlatform('twitch')">TW</button>
+        <button class="pt-btn" id="pt-yt" onclick="setPlatform('youtube')">YT</button>
+      </div>
+      <input class="chat-input" id="chatInput" placeholder="Send a message…" onkeydown="onInputKey(event)" oninput="onChatInput(event)" autocomplete="off" spellcheck="false">
+      <button class="emote-toggle-btn" id="emoteToggleBtn" onclick="toggleEmotePicker()" title="Emotes">😊</button>
+      <button class="send-btn" id="sendBtn" onclick="sendMessage()">Send</button>
+    </div>
+  </div>
+
+
+
+  <!-- Profile panel -->
+  <div class="profile-panel" id="profilePanel">
+    <div class="pp-header" id="ppHeader">
+      <button class="pp-close" onclick="closeProfile()">✕</button>
+      <div class="pp-loading" style="width:100%;padding:30px 0">Loading…</div>
+    </div>
+    <div class="pp-body" id="ppBody"></div>
+  </div>
+
+  <div id="ctxMenu" class="ctx-menu" style="display:none"></div>
+  <!-- Mod modals -->
+  <div class="modal-overlay" id="modalOverlay">
+    <div class="modal" id="modalBox">
+      <h3 id="modalTitle">Confirm</h3>
+      <p class="modal-sub" id="modalSub"></p>
+      <div id="modalBody"></div>
+      <div class="modal-btns">
+        <button class="modal-cancel" onclick="closeModal()">Cancel</button>
+        <button class="modal-confirm" id="modalConfirmBtn" onclick="modalConfirm()">Confirm</button>
+      </div>
+    </div>
+  </div>
+  <div class="statusbar">
+    <div class="si"><span class="ml s" id="mode-lbl">Streamer</span></div>
+  </div>
+</div>
+
+<div class="update-banner" id="updateBanner">
+  <div class="update-banner-title" id="updateBannerTitle">Update Available</div>
+  <div class="update-banner-body" id="updateBannerBody"></div>
+  <div class="update-banner-btns">
+    <button class="ub-install" id="updateInstallBtn" onclick="handleUpdateInstall()">Install &amp; Restart</button>
+    <button class="ub-dismiss" onclick="el('updateBanner').classList.remove('visible')">Later</button>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script>
+
+// ═══════ PERSIST SETUP FIELDS ═══════
+const SETUP_FIELDS = ['fbUrl','fbKey','twChannel','twClientId','twClientId2','delaySeconds','ytVideoId'];
+
+function toggleSecret(btn){
+  const wrap = btn.closest('.field-secret');
+  if(!wrap) return;
+  const inp = wrap.querySelector('input');
+  if(!inp) return;
+  const show = inp.type === 'password';
+  inp.type = show ? 'text' : 'password';
+  btn.classList.toggle('revealed', show);
+  btn.innerHTML = show
+    ? `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`
+    : `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
+}
+
+function initSecretFields(){
+  document.querySelectorAll('.field-secret').forEach(wrap=>{
+    const inp = wrap.querySelector('input');
+    if(!inp || wrap.querySelector('.eye-btn')) return;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'eye-btn';
+    btn.title = 'Show/hide';
+    btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+    btn.onclick = () => toggleSecret(btn);
+    wrap.appendChild(btn);
+  });
+}
+
+document.addEventListener('DOMContentLoaded', initSecretFields);
+
+function extractTwitchToken(e){
+  // If someone pastes a full URL, extract just the token
+  setTimeout(()=>{
+    const inp = el('twClientId');
+    const val = inp.value;
+    const match = val.match(/[#&]?access_token=([a-zA-Z0-9]+)/);
+    if(match){
+      inp.value = match[1];
+      saveField(inp);
+    }
+  }, 0);
+}
+
+function getTwitchToken(){
+  const cid = document.getElementById('twClientId2').value.trim();
+  if(!cid){ alert('Enter your Client ID first.'); return; }
+  const scopes = 'moderator:manage:chat_messages+user:write:chat+moderator:manage:banned_users+moderator:manage:warnings+moderator:read:followers+channel:read:subscriptions';
+  const url = `https://id.twitch.tv/oauth2/authorize?client_id=${encodeURIComponent(cid)}&redirect_uri=http://localhost&response_type=token&scope=${scopes}`;
+  // Open in default system browser
+  if(window.electronAPI && window.electronAPI.openExternal){
+    window.electronAPI.openExternal(url);
+  } else {
+    window.open(url, '_blank');
+  }
+}
+
+function saveField(input){
+  localStorage.setItem('sc_'+input.id, input.value);
+}
+
+function restoreFields(){
+  SETUP_FIELDS.forEach(id=>{
+    const saved=localStorage.getItem('sc_'+id);
+    const el=document.getElementById(id);
+    if(saved&&el) el.value=saved;
+  });
+}
+
+restoreFields();
+
+// ═══════ STATE ═══════
+let DELAY = 6000;
+let mode='streamer', cfg={}, messages=[], deletedIds=new Set();
+let fbRef=null, twitchWs=null;
+const ytTabId=Math.random().toString(36).slice(2); // unique per tab
+let twToken=null, twUserId=null, twBroadcasterId=null, twDisplayName=null, ytToken=null;
+const timedOutUsers={}; // username.lower -> {until: ms, duration: s}
+const bannedUsers=new Set(); // username.lower
+let ownMessageIds=new Set();
+let pingMessageIds=new Set(); // mod pings to streamer — bypass delay + highlight
+const msgMap=new Map(); // id -> msg object for profile lookup
+const sessionActions={}; // userId -> {timeouts:n, bans:n}
+let ytChatId=null, ytNextPage=null;
+let sendPlatform='twitch';
+let replyToMsg=null; // message being replied to
+
+// Emote storage
+// twitchEmotes: Map<name, {id, url}>
+// sevenTVEmoteMap: Map<name, {id, url}>
+// allEmotes: [{name, url, source:'tw'|'7tv'}] for picker
+let twitchEmoteMap = new Map();
+let sevenTVEmoteMap = new Map();
+let allEmotes = [];
+let emoteTab = 'tw';
+let emotesLoaded = false;
+let ytDisplayName = null;
+const twUserList = new Map(); // lowercase -> displayName
+const ytUserList = new Map();
+
+
+// ═══════ SETUP ═══════
+function launch(m){
+  const fbUrl=v('fbUrl'),fbKey=v('fbKey'),twCh=v('twChannel'),twToken_=v('twClientId'),twCid=v('twClientId2'),ytVid=v('ytVideoId');
+  const delaySec=v('delaySeconds');
+  if(!twCh){alert('Enter a Twitch channel name.');return;}
+  if(!twToken_){alert('Enter your Twitch OAuth token.');return;}
+  if((!fbUrl||!fbKey)&&!confirm('Firebase not configured — deletions won\'t sync across devices. Continue?'))return;
+
+  const newCfg={fbUrl,fbKey,twCh:twCh.toLowerCase(),twCid,twToken:twToken_,ytVid,delay:delaySec?parseFloat(delaySec)*1000:6000};
+
+  // Check what changed vs the previous config (if returning from settings)
+  let prevCfg = null;
+  const prevMode = el('setup').dataset.prevMode || null;
+  try { prevCfg = JSON.parse(el('setup').dataset.prevCfg || 'null'); } catch {}
+
+  // Compare only the fields that require a reconnect when changed
+  const channelChanged = prevCfg && (prevCfg.twCh !== newCfg.twCh || prevCfg.fbUrl !== newCfg.fbUrl || prevCfg.fbKey !== newCfg.fbKey);
+  const tokenChanged   = prevCfg && prevCfg.twToken !== newCfg.twToken;
+  const ytChanged      = prevCfg && prevCfg.ytVid !== newCfg.ytVid;
+  // Only treat mode as changed if it was explicitly set before (not empty string)
+  const modeChanged    = !!(prevMode && prevMode !== m);
+  const firstLaunch    = !prevCfg; // prevCfg is null on first ever launch
+
+  const needsFullReset = firstLaunch || channelChanged || tokenChanged || modeChanged;
+  const needsYtReset   = needsFullReset || ytChanged;
+
+  cfg = newCfg;
+
+  if(needsFullReset){
+    resetSession();
+    if(twToken_){ twToken=twToken_; sessionStorage.setItem('tw_token', twToken_); }
+    if(twCh) twUserList.set(twCh.toLowerCase(), twCh);
+    DELAY=cfg.delay;
+    mode=m;
+    sessionStorage.setItem('stream_cfg',JSON.stringify(cfg));
+    sessionStorage.setItem('stream_mode',mode);
+    el('setup').style.display='none';
+    el('app').style.display='flex';
+    initApp();
+  } else {
+    // Same channel/token/mode — just update non-disruptive settings and return to chat
+    DELAY = cfg.delay;
+    el('delaySeconds').value = delaySec;
+    // Update delay badge
+    const db = el('delaySeconds');
+    if(db) db.value = delaySec || 6;
+    updateModeUI();
+    // If YT channel changed, reconnect YouTube only
+    if(needsYtReset && ytVid){
+      if(window.electronAPI) window.electronAPI.closeYoutubeChat();
+      ytToken=null; ytDisplayName=null;
+      el('auth-yt-btn').className='auth-btn auth-yt'; el('auth-yt-btn').textContent='Connect YouTube';
+      el('auth-yt-btn').onclick=connectYoutube; el('auth-yt-btn').disabled=false;
+      el('logout-yt-btn').className='logout-btn';
+      el('yt-username').className='auth-username'; el('yt-username').textContent='';
+    }
+    el('setup').dataset.prevCfg='';
+    el('setup').dataset.prevMode='';
+    el('setup').style.display='none';
+    el('app').style.display='flex';
+  }
+}
+function v(id){return document.getElementById(id).value.trim();}
+
+// ═══════ INIT ═══════
+function initApp(){
+  // If delay was customised in a previous session, restore it
+  const savedDelaySec=localStorage.getItem('sc_delaySeconds');
+  if(savedDelaySec&&!isNaN(savedDelaySec)&&cfg.delay===undefined){
+    const v=Math.max(0,Math.min(300,parseInt(savedDelaySec)));
+    DELAY=v*1000; cfg.delay=DELAY;
+  }
+  // Auto-login Twitch from saved token
+  const savedTwToken=localStorage.getItem('sc_twClientId');
+  if(savedTwToken&&!sessionStorage.getItem('tw_token')){
+    twToken=savedTwToken; sessionStorage.setItem('tw_token',savedTwToken);
+    cfg.twCid=localStorage.getItem('sc_twClientId2')||cfg.twCid||'';
+  }
+  const savedTw=sessionStorage.getItem('tw_token');
+  const savedYt=null; // YouTube uses Electron scraper, no OAuth token
+  const savedTwName=sessionStorage.getItem('tw_display_name');
+  const savedYtName=sessionStorage.getItem('yt_display_name');
+  // Restore names first so they show immediately; async fetches will overwrite with fresh data
+  if(savedTwName&&savedTw){el('tw-username').textContent=savedTwName;el('tw-username').className='auth-username visible';}
+  if(savedYtName&&savedYt){ytDisplayName=savedYtName;el('yt-username').textContent=savedYtName;el('yt-username').className='auth-username visible';ytUserList.set(savedYtName.toLowerCase(),savedYtName);}
+  if(savedTw){twToken=savedTw;onTwitchAuthed();}
+  // YouTube auto-connects via Connect button, not saved token
+  updateModeUI();
+  if(cfg.fbUrl&&cfg.fbKey) initFirebase(); else showBanner('bn-fbw');
+  connectTwitch();
+  // YouTube connects via the Connect YouTube button — nothing to init here
+  if(!cfg.ytVid) showBanner('bn-noyt');
+  updateSendUI();
+  renderLoop();
+}
+
+// ═══════ MODE ═══════
+function updateModeUI(){
+  const s=mode==='streamer';
+  cls('tab-s','mode-btn'+(s?' as':''));
+  cls('tab-m','mode-btn'+(!s?' am':''));
+  el('delay-badge').style.display=s?'flex':'none';
+  el('delaySeconds').value=DELAY/1000;
+  el('delaySeconds').oninput=()=>{ const v=Math.max(0,Math.min(300,parseInt(el('delaySeconds').value)||0)); DELAY=v*1000; cfg.delay=DELAY; localStorage.setItem('stream-chat-cfg',JSON.stringify(cfg)); localStorage.setItem('sc_delaySeconds',v); };
+  el('bn-mod').style.display=s?'none':'flex';
+  el('auth-panel').style.display='block';
+  const lbl=el('mode-lbl');
+  lbl.textContent=s?'Streamer':'Mod';
+  lbl.className='ml '+(s?'s':'m');
+  renderMessages();
+}
+function switchMode(m){mode=m;sessionStorage.setItem('stream_mode',m);updateModeUI();}
+
+// ═══════ FIREBASE ═══════
+function initFirebase(){
+  dot('d-fb','spin');
+  try{
+    const app=firebase.initializeApp({apiKey:cfg.fbKey,databaseURL:cfg.fbUrl});
+    const db=firebase.database(app);
+    // Deleted message sync
+    fbRef=db.ref('stream-chat/deleted');
+    fbRef.on('child_added',snap=>{deletedIds.add(snap.key);renderMessages();},()=>{dot('d-fb','err');showBanner('bn-fbw');});
+    fbRef.once('value',()=>dot('d-fb','ok'),()=>{dot('d-fb','err');showBanner('bn-fbw');});
+    // YouTube messages come via Electron IPC scraper — no Firebase bridge needed
+  }catch{dot('d-fb','err');showBanner('bn-fbw');}
+}
+
+
+
+
+
+function syncDelete(id){
+  deletedIds.add(id);
+  if(fbRef) fbRef.child(id.replace(/[.#$/\[\]]/g,'_')).set(true).catch(()=>{});
+  renderMessages();
+}
+
+// ═══════ TWITCH OAUTH ═══════
+function loginTwitch(){
+  // In Electron desktop mode, token is pasted directly — no OAuth needed
+  const savedToken = localStorage.getItem('sc_twClientId');
+  if(!savedToken){ flashErr('Enter your Twitch token in Settings first.'); return; }
+  twToken = savedToken;
+  sessionStorage.setItem('tw_token', savedToken);
+  onTwitchAuthed();
+}
+async function onTwitchAuthed(){
+  try{
+    // If we don't have a Client ID, fetch it from the token validation endpoint
+    if(!cfg.twCid){
+      const val=await fetch('https://id.twitch.tv/oauth2/validate',{headers:{Authorization:'OAuth '+twToken}});
+      const vd=await val.json();
+      if(vd.client_id) cfg.twCid=vd.client_id;
+    }
+    const [me,bc]=await Promise.all([
+      twFetch('https://api.twitch.tv/helix/users'),
+      twFetch(`https://api.twitch.tv/helix/users?login=${cfg.twCh}`)
+    ]);
+    twUserId=me.data[0].id;
+    twDisplayName=me.data[0].display_name;
+    twBroadcasterId=bc.data[0].id;
+    sessionStorage.setItem('tw_display_name', twDisplayName);
+    el('tw-username').textContent='✓ '+twDisplayName+' connected';
+    el('tw-username').className='auth-username visible';
+    twUserList.set(twDisplayName.toLowerCase(), twDisplayName);
+    loadTwitchEmotes();
+    loadTwitchBadges();
+  }catch(e){console.warn('Twitch user lookup failed',e);}
+  updateSendUI();
+}
+async function twFetch(url,opts={}){
+  const r=await fetch(url,{...opts,headers:{'Authorization':`Bearer ${twToken}`,'Client-Id':cfg.twCid||'',...(opts.headers||{})}});
+  if(!r.ok) throw new Error(r.status);
+  if(r.status===204) return {};
+  return r.json();
+}
+
+// ═══════ YOUTUBE (ELECTRON) ═══════
+async function connectYoutube(){
+  if(!window.electronAPI){ flashErr('YouTube connection requires the desktop app.'); return; }
+  if(!cfg.ytVid){ flashErr('Enter a YouTube channel or live URL first.'); return; }
+  el('auth-yt-btn').textContent='Connecting…';
+  el('auth-yt-btn').disabled=true;
+  dot('d-yt','spin');
+  const result = await window.electronAPI.openYoutubeChat(cfg.ytVid);
+  el('auth-yt-btn').disabled=false;
+  if(result.ok){
+    onYoutubeConnected(result.channelName||'');
+  } else {
+    flashErr('YouTube connect failed: '+(result.error||'unknown error'));
+    el('auth-yt-btn').textContent='Connect YouTube';
+    dot('d-yt','err');
+  }
+}
+
+async function loadYoutubeEmotes(){
+  if(!window.electronAPI) return;
+  try{
+    const result = await window.electronAPI.getYoutubeEmotes();
+    if(result.ok && result.emotes.length > 0){
+      // Remove old YT emotes and re-add fresh ones
+      allEmotes = allEmotes.filter(e => e.source !== 'yt');
+      result.emotes.forEach(e => {
+        allEmotes.push({ name: e.name, url: e.url, source: 'yt' });
+      });
+      emotesLoaded = true;
+      renderEmoteGrid();
+      console.log(`Loaded ${result.emotes.length} YouTube emotes`);
+    }
+  } catch(e){ console.warn('Failed to load YouTube emotes', e); }
+}
+
+function onYoutubeConnected(channelName){
+  ytToken='electron'; // sentinel so send/mod checks pass
+  el('auth-yt-btn').className='auth-btn auth-yt authed';
+  el('auth-yt-btn').textContent='✓ YouTube connected';
+  el('auth-yt-btn').onclick=null;
+  el('logout-yt-btn').className='logout-btn visible';
+  if(channelName){
+    ytDisplayName=channelName;
+    sessionStorage.setItem('yt_display_name', channelName);
+    el('yt-username').textContent=channelName;
+    el('yt-username').className='auth-username visible';
+    ytUserList.set(channelName.toLowerCase(), channelName);
+  }
+  dot('d-yt','ok');
+  updateSendUI();
+}
+
+async function disconnectYoutube(){
+  if(window.electronAPI) await window.electronAPI.closeYoutubeChat();
+  ytToken=null;
+  ytDisplayName=null;
+  el('auth-yt-btn').className='auth-btn auth-yt';
+  el('auth-yt-btn').textContent='Connect YouTube';
+  el('auth-yt-btn').onclick=connectYoutube;
+  el('logout-yt-btn').className='logout-btn';
+  el('yt-username').className='auth-username';
+  sessionStorage.removeItem('yt_display_name');
+  dot('d-yt','');
+  updateSendUI();
+}
+
+// Set up IPC listeners from main process
+if(window.electronAPI){
+  window.electronAPI.onYoutubeMessage(msg=>{
+    const ytPingName=ytDisplayName||twDisplayName;
+    const ytPingPattern=ytPingName?new RegExp('@'+ytPingName.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i'):null;
+    if(msg.isMod&&ytPingPattern&&ytPingPattern.test(msg.text)) pingMessageIds.add(msg.id);
+    msg.color='#ff5555';
+    msg.emotesTag='';
+    msg.platform='youtube';
+    addMsg(msg);
+    // Also write to Firebase bridge if we're the leader
+  });
+  window.electronAPI.onYoutubeStatus(({status,detail})=>{
+    if(status==='connected') dot('d-yt','ok');
+    else if(status==='connecting') dot('d-yt','spin');
+    else if(status==='error'){ dot('d-yt','err'); if(detail) flashErr('YouTube: '+detail); }
+    else dot('d-yt','');
+  });
+}
+
+// ═══════ DELETE ═══════
+async function deleteTwitchMsg(id,btn){
+  if(!twToken){flashErr('Log in with Twitch first.');return;}
+  if(!twUserId||!twBroadcasterId){flashErr('Twitch IDs not ready — try again.');return;}
+  setBtn(btn,'pending','⏳');
+  try{
+    const r=await fetch(`https://api.twitch.tv/helix/moderation/chat?broadcaster_id=${twBroadcasterId}&moderator_id=${twUserId}&message_id=${id}`,
+      {method:'DELETE',headers:{'Authorization':`Bearer ${twToken}`,'Client-Id':cfg.twCid}});
+    if(r.status===204){syncDelete(id);}
+    else{const j=await r.json().catch(()=>({}));flashErr('Twitch delete failed: '+(j.message||r.status));setBtn(btn,'','delete');}
+  }catch(e){flashErr('Twitch error: '+e.message);setBtn(btn,'','delete');}
+}
+async function debugYtDelete(id,authorId,text){
+  if(!window.electronAPI?.debugYoutube) return;
+  const r = await window.electronAPI.debugYoutube();
+  if(r.ok) console.log('[YT Delete Debug] Trying to delete:', {id,authorId,text:''+text?.slice(0,40)});
+  if(r.ok) console.log('[YT Delete Debug] DOM messages:', r.info);
+}
+
+async function deleteYoutubeMsg(id,btn,authorId,text){
+  if(!window.electronAPI){flashErr('YouTube delete requires the desktop app.');return;}
+  setBtn(btn,'pending','⏳');
+  try{
+    await debugYtDelete(id, authorId, text);
+    const result=await window.electronAPI.deleteYoutubeMessage({msgId:id,authorId:authorId||'',text:text||''});
+    if(result.ok){syncDelete(id);}
+    else{flashErr('YouTube delete failed: '+(result.error||'Not a moderator?'));setBtn(btn,'','delete');}
+  }catch(e){flashErr('YouTube error: '+e.message);setBtn(btn,'','delete');}
+}
+async function handleDelete(id,platform,btn,authorId,text){
+  if(platform==='twitch') await deleteTwitchMsg(id,btn);
+  else await deleteYoutubeMsg(id,btn,authorId,text);
+}
+
+
+// ═══════ INPUT HELPERS ═══════
+function getChatText(){ return el('chatInput').value; }
+function setChatText(val){ el('chatInput').value=val; }
+function getCaretTextOffsetSimple(){ return el('chatInput').selectionStart||0; }
+function setCaretToEnd(){
+  const inp=el('chatInput');
+  inp.focus();
+  const l=inp.value.length;
+  inp.setSelectionRange(l,l);
+}
+
+function insertAtCaret(name){
+  const inp=el('chatInput');
+  const start=inp.selectionStart;
+  const end=inp.selectionEnd;
+  const val=inp.value;
+  const space=(start>0&&val[start-1]!==' ')?' ':'';
+  const insert=space+name+' ';
+  inp.value=val.slice(0,start)+insert+val.slice(end);
+  const pos=start+insert.length;
+  inp.focus();
+  inp.setSelectionRange(pos,pos);
+}
+
+// ═══════ SEND MESSAGE ═══════
+function updateSendUI(){
+  const inp = el('chatInput');
+  const btn = el('sendBtn');
+  const canSendTw = !!twToken;
+  const canSendYt = !!ytToken; // In Electron mode ytToken='electron' when scraper connected; API mode also sets ytChatId
+  if(sendPlatform==='twitch'){
+    btn.className='send-btn';
+    inp.dataset.placeholder = canSendTw ? 'Send to Twitch…' : 'Log in with Twitch to chat';
+    btn.disabled = !canSendTw;
+  } else {
+    btn.className='send-btn yt-send';
+    inp.dataset.placeholder = canSendYt ? 'Send to YouTube…' : 'Connect YouTube to chat';
+    btn.disabled = !canSendYt;
+  }
+  // show/hide YT toggle based on config
+  el('pt-yt').style.display = cfg.ytVid ? '' : 'none';
+}
+
+function setPlatform(p){
+  sendPlatform=p;
+  cls('pt-tw','pt-btn'+(p==='twitch'?' tw-active':''));
+  cls('pt-yt','pt-btn'+(p==='youtube'?' yt-active':''));
+  updateSendUI();
+  closeEmotePicker();
+}
+
+function onInputKey(e){
+  const ac=el('acDropdown');
+  if(ac.classList.contains('open')){
+    if(e.key==='ArrowDown'){e.preventDefault();moveAcSelection(1);return;}
+    if(e.key==='ArrowUp'){e.preventDefault();moveAcSelection(-1);return;}
+    if(e.key==='Tab'||e.key==='Enter'){
+      e.preventDefault();
+      const sel=ac.querySelector('.ac-item.selected')||ac.querySelector('.ac-item');
+      if(sel){ const name=sel.querySelector('.ac-name')?.textContent; if(name){ if(acMode==='user') commitUserAc(name); else commitAc(name); } return; }
+    }
+    if(e.key==='Escape'){closeAc();return;}
+  }
+  if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMessage();}
+}
+
+async function sendMessage(){
+  const inp=el('chatInput');
+  const text=getChatText().trim();
+  if(!text) return;
+  if(sendPlatform==='twitch') await sendTwitch(text);
+  else await sendYoutube(text);
+}
+
+async function sendTwitch(text){
+  if(!twToken){flashErr('Enter your Twitch token in Settings first.');return;}
+  // If user IDs haven't loaded yet, fetch them now
+  if(!twUserId||!twBroadcasterId){
+    try{
+      const [me,bc]=await Promise.all([
+        twFetch('https://api.twitch.tv/helix/users'),
+        twFetch(`https://api.twitch.tv/helix/users?login=${cfg.twCh}`)
+      ]);
+      twUserId=me.data[0].id; twBroadcasterId=bc.data[0].id;
+    }catch(e){flashErr('Twitch auth failed — check your token.');return;}
+  }
+  const btn=el('sendBtn');
+  btn.disabled=true; btn.textContent='…';
+  try{
+    const r=await fetch('https://api.twitch.tv/helix/chat/messages',{
+      method:'POST',
+      headers:{'Authorization':`Bearer ${twToken}`,'Client-Id':cfg.twCid,'Content-Type':'application/json'},
+      body:JSON.stringify({broadcaster_id:twBroadcasterId,sender_id:twUserId,message:text,...(replyToMsg&&replyToMsg.platform==='twitch'?{reply_parent_message_id:replyToMsg.id}:{})})
+    });
+    if(r.ok){ el('chatInput').value=''; cancelReply(); }
+    else{ const j=await r.json().catch(()=>({})); flashErr('Send failed: '+(j.message||r.status)); }
+  }catch(e){flashErr('Send error: '+e.message);}
+  btn.textContent='Send'; updateSendUI();
+}
+
+async function sendYoutube(text){
+  if(!ytToken){flashErr('Connect YouTube first.');return;}
+  if(!window.electronAPI){flashErr('YouTube sending requires the desktop app.');return;}
+  const btn=el('sendBtn');
+  btn.disabled=true; btn.textContent='…';
+  try{
+    const result=await window.electronAPI.sendYoutubeMessage(text);
+    if(result.ok){ el('chatInput').value=''; cancelReply(); }
+    else flashErr('Send failed: '+(result.error||'unknown'));
+  }catch(e){flashErr('Send error: '+e.message);}
+  btn.textContent='Send'; updateSendUI();
+}
+
+
+// ═══════ BADGES ═══════
+// badgeCache: { 'global': {setId: {versionId: imageUrl}}, 'channel': {...} }
+let badgeCache = {};
+
+async function loadTwitchBadges() {
+  try {
+    const [glob, chan] = await Promise.all([
+      twFetch('https://api.twitch.tv/helix/chat/badges/global'),
+      twBroadcasterId ? twFetch(`https://api.twitch.tv/helix/chat/badges?broadcaster_id=${twBroadcasterId}`) : Promise.resolve({data:[]})
+    ]);
+    const parse = (data, key) => {
+      badgeCache[key] = {};
+      (data||[]).forEach(set => {
+        badgeCache[key][set.set_id] = {};
+        (set.versions||[]).forEach(v => { badgeCache[key][set.set_id][v.id] = v.image_url_1x; });
+      });
+    };
+    parse(glob.data, 'global');
+    parse(chan.data, 'channel');
+  } catch(e) { console.warn('Badge load failed', e); }
+}
+
+function resolveBadge(setId, versionId) {
+  return (badgeCache.channel?.[setId]?.[versionId]) ||
+         (badgeCache.global?.[setId]?.[versionId]) || null;
+}
+
+function buildBadgeImgs(msg) {
+  if (!msg.badgesTag || msg.platform !== 'twitch') return '<span class="msg-badges"></span>';
+  const imgs = msg.badgesTag.split(',').map(b => {
+    const [setId, versionId] = b.split('/');
+    const url = resolveBadge(setId, versionId);
+    return url ? `<img class="msg-badge" src="${safeUrl(url)}" alt="${esc(setId)}" title="${esc(setId)}">` : '';
+  }).join('');
+  return `<span class="msg-badges">${imgs}</span>`;
+}
+
+// ═══════ EMOTES ═══════
+async function loadTwitchEmotes(){
+  try{
+    // Global emotes
+    const g=await twFetch('https://api.twitch.tv/helix/chat/emotes/global');
+    (g.data||[]).forEach(e=>{
+      const url=e.images?.url_1x||`https://static-cdn.jtvnw.net/emoticons/v2/${e.id}/default/dark/1.0`;
+      twitchEmoteMap.set(e.name,{id:e.id,url});
+      allEmotes.push({name:e.name,url,source:'tw'});
+    });
+    // Channel/subscriber emotes
+    if(twBroadcasterId){
+      const c=await twFetch(`https://api.twitch.tv/helix/chat/emotes?broadcaster_id=${twBroadcasterId}`);
+      (c.data||[]).forEach(e=>{
+        const url=e.images?.url_1x||`https://static-cdn.jtvnw.net/emoticons/v2/${e.id}/default/dark/1.0`;
+        twitchEmoteMap.set(e.name,{id:e.id,url});
+        allEmotes.push({name:e.name,url,source:'tw'});
+      });
+    }
+  }catch(e){console.warn('Twitch emote load failed',e);}
+  load7TVEmotes();
+  renderEmoteGrid();
+}
+
+async function load7TVEmotes(){
+  try{
+    // Global 7TV emotes
+    const g=await fetch('https://7tv.io/v3/emote-sets/global').then(r=>r.json());
+    (g.emotes||[]).forEach(e=>{
+      const url=`https://cdn.7tv.app/emote/${e.id}/1x.webp`;
+      sevenTVEmoteMap.set(e.name,{id:e.id,url});
+      allEmotes.push({name:e.name,url,source:'7tv'});
+    });
+    // Channel 7TV emotes
+    if(twBroadcasterId){
+      const c=await fetch(`https://7tv.io/v3/users/twitch/${twBroadcasterId}`).then(r=>r.json());
+      (c.emote_set?.emotes||[]).forEach(e=>{
+        const url=`https://cdn.7tv.app/emote/${e.id}/1x.webp`;
+        sevenTVEmoteMap.set(e.name,{id:e.id,url});
+        allEmotes.push({name:e.name,url,source:'7tv'});
+      });
+    }
+  }catch(e){console.warn('7TV emote load failed',e);}
+  emotesLoaded=true;
+  renderEmoteGrid();
+}
+
+// ═══════ EMOTE PICKER UI ═══════
+function toggleEmotePicker(){
+  const p=el('emotePicker');
+  const btn=el('emoteToggleBtn');
+  if(p.classList.contains('open')){
+    p.classList.remove('open'); btn.classList.remove('active');
+  } else {
+    p.classList.add('open'); btn.classList.add('active');
+    el('emoteSearch').focus();
+    renderEmoteGrid();
+  }
+}
+function closeEmotePicker(){
+  el('emotePicker').classList.remove('open');
+  el('emoteToggleBtn').classList.remove('active');
+}
+
+function filterEmotes(){ renderEmoteGrid(); }
+
+function renderEmoteGrid(){
+  const grid=el('emoteGrid');
+  const query=el('emoteSearch')?.value?.toLowerCase()||'';
+  const ytMode=sendPlatform==='youtube';
+  const filtered=allEmotes.filter(e=>(ytMode?(e.source==='yt'||e.source==='7tv'):e.source!=='yt')&&(!query||e.name.toLowerCase().includes(query)));
+  if(!emotesLoaded&&filtered.length===0){
+    grid.innerHTML='<div class="emote-loading">Loading emotes…</div>'; return;
+  }
+  if(filtered.length===0){
+    grid.innerHTML=`<div class="emote-loading">${ytMode&&!query?'No YouTube emotes loaded yet':'No emotes found'}</div>`; return;
+  }
+  grid.innerHTML='';
+  filtered.slice(0,300).forEach(e=>{
+    const div=document.createElement('div');
+    div.className='ep-item';
+    div.title=e.name+' ('+e.source+')';
+    div.innerHTML=`<img src="${safeUrl(e.url)}" alt="${esc(e.name)}" loading="lazy"><span class="ep-tip">${esc(e.name)}</span>`;
+    div.onmousedown=(ev)=>{ev.preventDefault();insertEmote(e.name);};
+    grid.appendChild(div);
+  });
+}
+
+function insertEmote(name){
+  insertAtCaret(name);
+  closeEmotePicker();
+}
+
+// ═══════ AUTOCOMPLETE (:name) ═══════
+let acSelectedIndex = -1;
+
+let acMode = 'emote'; // 'emote' or 'user'
+
+function onChatInput(e){
+  const val = getChatText();
+  const cursor = getCaretTextOffsetSimple();
+  const textToCursor = val.slice(0, cursor);
+  const mentionMatch = textToCursor.match(/@([a-zA-Z0-9_]*)$/);
+  const colonMatch = textToCursor.match(/:([a-zA-Z0-9_]*)$/);
+  if(mentionMatch && mentionMatch[1].length >= 1){
+    acMode = 'user';
+    showUserAc(mentionMatch[1]);
+  } else if(colonMatch && colonMatch[1].length >= 2){
+    acMode = 'emote';
+    showAc(colonMatch[1]);
+  } else {
+    closeAc();
+  }
+}
+
+function showUserAc(query){
+  const ac = el('acDropdown');
+  const q = query.toLowerCase();
+  const list = sendPlatform === 'youtube' ? ytUserList : twUserList;
+  const matches = [...list.values()]
+    .filter(name => name.toLowerCase().includes(q))
+    .sort((a,b) => {
+      // Prioritise starts-with over contains
+      const al = a.toLowerCase(), bl = b.toLowerCase();
+      return (al.startsWith(q)?0:1) - (bl.startsWith(q)?0:1) || al.localeCompare(bl);
+    })
+    .slice(0, 12);
+  if(matches.length === 0){ closeAc(); return; }
+  acSelectedIndex = -1;
+  ac.innerHTML = '';
+  matches.forEach((name, i) => {
+    const div = document.createElement('div');
+    div.className = 'ac-item';
+    div.dataset.idx = i;
+    div.innerHTML = `<span class="ac-user-icon">@</span><span class="ac-name">${esc(name)}</span>`;
+    div.onmousedown = (ev) => { ev.preventDefault(); commitUserAc(name); };
+    ac.appendChild(div);
+  });
+  ac.classList.add('open');
+  closeEmotePicker();
+}
+
+function commitUserAc(name){
+  const inp = el('chatInput');
+  const val = inp.value;
+  const cursor = inp.selectionStart;
+  const textToCursor = val.slice(0, cursor);
+  const atIdx = textToCursor.lastIndexOf('@');
+  if(atIdx === -1){ closeAc(); return; }
+  const after = val.slice(cursor);
+  inp.value = val.slice(0, atIdx) + '@' + name + ' ' + after;
+  const pos = atIdx + name.length + 2;
+  inp.focus();
+  inp.setSelectionRange(pos, pos);
+  closeAc();
+}
+
+function showAc(query){
+  const ac = el('acDropdown');
+  const q = query.toLowerCase();
+  const matches = allEmotes.filter(e => (sendPlatform==='youtube'?(e.source==='yt'||e.source==='7tv'):e.source!=='yt') && e.name.toLowerCase().includes(q)).slice(0, 12);
+  if(matches.length === 0){ closeAc(); return; }
+  acSelectedIndex = -1;
+  ac.innerHTML = '';
+  matches.forEach((e, i) => {
+    const div = document.createElement('div');
+    div.className = 'ac-item';
+    div.dataset.idx = i;
+    div.innerHTML = `<img src="${safeUrl(e.url)}" alt="${esc(e.name)}"><span class="ac-name">${esc(e.name)}</span><span class="ac-src">${e.source}</span>`;
+    div.onmousedown = (ev) => { ev.preventDefault(); commitAc(e.name); };
+    ac.appendChild(div);
+  });
+  ac.classList.add('open');
+  closeEmotePicker();
+}
+
+function closeAc(){
+  el('acDropdown').classList.remove('open');
+  acSelectedIndex = -1;
+}
+
+function moveAcSelection(dir){
+  const ac = el('acDropdown');
+  const items = [...ac.querySelectorAll('.ac-item')];
+  if(!items.length) return;
+  items.forEach(i=>i.classList.remove('selected'));
+  acSelectedIndex = Math.max(0, Math.min(items.length-1, acSelectedIndex + dir));
+  items[acSelectedIndex].classList.add('selected');
+  items[acSelectedIndex].scrollIntoView({block:'nearest'});
+}
+
+function commitAc(name){
+  const inp = el('chatInput');
+  const val = inp.value;
+  const cursor = inp.selectionStart;
+  const textToCursor = val.slice(0, cursor);
+  const colonIdx = textToCursor.lastIndexOf(':');
+  if(colonIdx === -1){ closeAc(); return; }
+  const after = val.slice(cursor);
+  inp.value = val.slice(0, colonIdx) + name + ' ' + after;
+  const pos = colonIdx + name.length + 1;
+  inp.focus();
+  inp.setSelectionRange(pos, pos);
+  closeAc();
+}
+
+// Close picker when clicking outside
+document.addEventListener('click',e=>{
+  if(!el('chatInputWrap').contains(e.target)){ closeEmotePicker(); closeAc(); }
+});
+
+// ═══════ TWITCH IRC ═══════
+function connectTwitch(){
+  dot('d-tw','spin');
+  twitchWs=new WebSocket('wss://irc-ws.chat.twitch.tv/');
+  twitchWs.onopen=()=>{
+    twitchWs.send('CAP REQ :twitch.tv/tags twitch.tv/commands');
+    twitchWs.send('PASS SCHMOOPIIE');
+    twitchWs.send('NICK justinfan'+Math.floor(Math.random()*80000+10000));
+    twitchWs.send('JOIN #'+cfg.twCh);
+  };
+  twitchWs.onmessage=e=>{
+    for(const line of e.data.split('\r\n')){
+      if(!line) continue;
+      if(line==='PING :tmi.twitch.tv'){twitchWs.send('PONG :tmi.twitch.tv');continue;}
+      if(line.includes('366')||line.includes('JOIN #')) dot('d-tw','ok');
+      if(line.includes('PRIVMSG'))   parseTwitchMsg(line);
+      if(line.includes('CLEARMSG'))  parseClearMsg(line);
+      if(line.includes('CLEARCHAT')) parseClearChat(line);
+    }
+  };
+  twitchWs.onerror=()=>dot('d-tw','err');
+  twitchWs.onclose=()=>{dot('d-tw','err');setTimeout(connectTwitch,5000);};
+}
+
+function parseTags(line){
+  const ts=line.startsWith('@')?line.slice(1,line.indexOf(' ')):'';
+  const t={};
+  ts.split(';').forEach(s=>{const i=s.indexOf('=');if(i>0)t[s.slice(0,i)]=s.slice(i+1);});
+  return t;
+}
+function parseTwitchMsg(line){
+  const tags=parseTags(line);
+  const match=line.match(/PRIVMSG #\S+ :(.+)$/);
+  if(!match) return;
+  const nick=(line.match(/:(\w+)!/)||[])[1]||'anon';
+  const id=tags['id']||('tw-'+Date.now()+Math.random().toString(36).slice(2));
+  if(twDisplayName&&(tags['display-name']||nick).toLowerCase()===twDisplayName.toLowerCase()) ownMessageIds.add(id);
+  const senderBadges=tags['badges']||'';
+  const isSenderMod=senderBadges.includes('moderator')||senderBadges.includes('broadcaster');
+  const pingPattern=twDisplayName?new RegExp('@'+twDisplayName.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i'):null;
+  if(isSenderMod&&pingPattern&&pingPattern.test(match[1])) pingMessageIds.add(id);
+  const replyParentId=tags['reply-parent-msg-id']||null;
+  const replyParentUser=tags['reply-parent-user-login']||tags['reply-parent-display-name']||null;
+  const replyParentText=tags['reply-parent-msg-body']||null;
+  addMsg({id,platform:'twitch',author:tags['display-name']||nick,
+    text:match[1],emotesTag:tags['emotes']||'',authorId:tags['user-id']||null,badgesTag:tags['badges']||'',badgeInfoTag:tags['badge-info']||'',replyParentId,replyParentUser,replyParentText,
+    color:tags['color']||rndColor(nick),ts:Date.now()});
+}
+function parseClearMsg(line){const id=parseTags(line)['target-msg-id'];if(id)syncDelete(id);}
+function parseClearChat(line){
+  const tags=parseTags(line);
+  const parts=line.trim().split(' ');
+  const user=parts[parts.length-1].replace(':','').trim().toLowerCase();
+  if(!user) return;
+  const dur=parseInt(tags['ban-duration']||'0');
+  if(dur>0){
+    timedOutUsers[user]={until:Date.now()+dur*1000,duration:dur};
+    delete bannedUsers[user];
+  } else if(!tags['ban-duration']) {
+    bannedUsers.add(user);
+    delete timedOutUsers[user];
+  }
+  messages.filter(m=>m.platform==='twitch'&&m.author.toLowerCase()===user).forEach(m=>syncDelete(m.id));
+  // Find the display name (mixed case) for button refresh
+  const displayName=(messages.find(m=>m.platform==='twitch'&&m.author.toLowerCase()===user)||{}).author;
+  if(displayName) setTimeout(()=>refreshModButtons(displayName),0);
+}
+
+// ═══════ YOUTUBE ═══════
+
+
+// ═══════ MESSAGES ═══════
+function addMsg(msg){
+  if(messages.find(m=>m.id===msg.id)) return;
+  messages.push(msg);
+  msgMap.set(msg.id, msg);
+  if(messages.length>400) messages=messages.slice(-400);
+  // Track usernames for @ autocomplete
+  if(msg.platform==='twitch'&&msg.author) twUserList.set(msg.author.toLowerCase(),msg.author);
+  if(msg.platform==='youtube'&&msg.author) ytUserList.set(msg.author.toLowerCase(),msg.author);
+  renderMessages();
+}
+
+// ═══════ EMOTE RENDERING ═══════
+function renderMsgText(text, emotesTag){
+  // Build Twitch emote ranges
+  const ranges=[];
+  if(emotesTag){
+    emotesTag.split('/').forEach(e=>{
+      const ci=e.indexOf(':'); if(ci<0) return;
+      const id=e.slice(0,ci);
+      e.slice(ci+1).split(',').forEach(pos=>{
+        const [s,en]=pos.split('-').map(Number);
+        ranges.push({id,start:s,end:en});
+      });
+    });
+    ranges.sort((a,b)=>a.start-b.start);
+  }
+  // Build segments using unicode-safe char array
+  const chars=[...text];
+  const segments=[];
+  let cursor=0;
+  ranges.forEach(({id,start,end})=>{
+    if(start>cursor) segments.push({type:'text',value:chars.slice(cursor,start).join('')});
+    const name=chars.slice(start,end+1).join('');
+    const url=`https://static-cdn.jtvnw.net/emoticons/v2/${id}/default/dark/1.0`;
+    segments.push({type:'emote',url,name});
+    cursor=end+1;
+  });
+  if(cursor<chars.length) segments.push({type:'text',value:chars.slice(cursor).join('')});
+
+  // Expand text segments for 7TV emotes
+  const final=[];
+  segments.forEach(seg=>{
+    if(seg.type!=='text'){final.push(seg);return;}
+    const words=seg.value.split(' ');
+    words.forEach((word,i)=>{
+      if(i>0) final.push({type:'text',value:' '});
+      const stv=sevenTVEmoteMap.get(word);
+      if(stv) final.push({type:'emote',url:stv.url,name:word});
+      else    final.push({type:'text',value:word});
+    });
+  });
+
+  return final.map(seg=>{
+    if(seg.type!=='text') return `<img class="emote" src="${safeUrl(seg.url)}" alt="${esc(seg.name)}" title="${esc(seg.name)}">`;
+    return linkify(seg.value);
+  }).join('');
+}
+
+// ═══════ RENDER ═══════
+function renderMessages(){
+  const area=document.getElementById('chatArea');
+  const now=Date.now(),s=mode==='streamer';
+  const toShow=s?messages.filter(m=>!deletedIds.has(m.id)&&(ownMessageIds.has(m.id)||pingMessageIds.has(m.id)||now-m.ts>=DELAY)):messages.filter(m=>!deletedIds.has(m.id)||mode==='mod');
+  el('emptyState').style.display=toShow.length===0?'flex':'none';
+  const rendered=new Map([...area.querySelectorAll('.msg')].map(e=>[e.dataset.id,e]));
+  const showSet=new Set(toShow.map(m=>m.id));
+  rendered.forEach((node,id)=>{
+    if(!showSet.has(id)){node.remove();return;}
+    if(deletedIds.has(id)){
+      if(mode==='mod') node.classList.add('msg-deleted');
+      else node.remove();
+    }
+  });
+  const atBottom=area.scrollHeight-area.scrollTop-area.clientHeight<80;
+  let added=false;
+  toShow.forEach(msg=>{
+    if(rendered.has(msg.id)) return;
+    area.appendChild(buildMsg(msg));
+    added=true;
+  });
+  if(added&&!userScrolledUp){ area.scrollTop=area.scrollHeight; }
+}
+
+function buildMsg(msg){
+  const div=document.createElement('div');
+  const isPing=pingMessageIds.has(msg.id);
+  div.className='msg '+(msg.platform==='twitch'?'tw':'yt')+(isPing?' msg-ping':'');
+  div.dataset.id=msg.id;
+  const t=new Date(msg.ts);
+  const time=t.getHours().toString().padStart(2,'0')+':'+t.getMinutes().toString().padStart(2,'0');
+  const isDel=deletedIds.has(msg.id);
+  const isMod=mode==='mod';
+  const renderedText=renderMsgText(msg.text,msg.emotesTag||'');
+  const badgesHtml = buildBadgeImgs(msg);
+  const replyBar = msg.replyParentId ? `<div class="msg-reply-bar" data-scrollto="${esc(msg.replyParentId)}"><span class="msg-reply-author">@${esc(msg.replyParentUser||'?')}</span><span class="msg-reply-text">${esc((msg.replyParentText||'').replace(/\\\\s/g,' ').slice(0,80))}</span></div>` : '';
+  div.innerHTML=
+    `<span class="msg-time">${time}</span>`+
+    `<div class="msg-body">${replyBar}${badgesHtml}<span class="msg-author" style="color:${msg.color}" data-msgid="${esc(msg.id)}">${esc(msg.author)}</span><span class="msg-sep">:</span><span class="msg-text">${renderedText}</span></div>`+
+    (isMod ? buildModActions(msg, isDel) : '');
+  return div;
+}
+
+function buildModActions(msg, isDel){
+  const aid=msg.authorId||'';
+  const aname=esc(msg.author);
+  const ulow=(msg.author||'').toLowerCase();
+  if(msg.platform==='youtube'){
+    const msgTextEsc=esc(msg.text||'');
+    return `<div class="msg-actions">
+      <button class="mod-btn del" onclick="handleDelete('${esc(msg.id)}','youtube',this,'${aid}','${msgTextEsc}')">delete</button>
+      <button class="mod-btn to" onclick="openYtTimeoutModal('${aid}','${aname}')">timeout</button>
+      <button class="mod-btn ban" onclick="openYtBanModal('${aid}','${aname}')">ban</button>
+    </div>`;
+  }
+  const isTO=!!timedOutUsers[ulow]&&timedOutUsers[ulow].until>Date.now();
+  const isBan=bannedUsers.has(ulow);
+  const toBtn=isTO
+    ? `<button class="mod-btn unban" onclick="untimeoutUser('${aid}','${aname}')">untimeout${toRemaining(ulow)}</button>`
+    : `<button class="mod-btn to" onclick="openTimeoutModal('${aid}','${aname}')">timeout</button>`;
+  const banBtn=isBan
+    ? `<button class="mod-btn unban" onclick="unbanTwitchUser('${aid}','${aname}')">unban</button>`
+    : `<button class="mod-btn ban" onclick="openBanModal('${aid}','${aname}')">ban</button>`;
+  return `<div class="msg-actions">
+    <button class="mod-btn del" onclick="handleDelete('${esc(msg.id)}','twitch',this)">delete</button>
+    <button class="mod-btn warn" onclick="openWarnModal('${aid}','${aname}')">warn</button>
+    ${toBtn}
+    ${banBtn}
+  </div>`;
+}
+
+function toRemaining(ulow){
+  const d=timedOutUsers[ulow];
+  if(!d) return '';
+  const rem=Math.max(0,Math.round((d.until-Date.now())/1000));
+  return rem>0?' ('+formatDuration(rem)+')':'';
+}
+
+// ═══════ MOD MODALS ═══════
+let modalAction=null;
+
+function openWarnModal(userId, username){
+  if(!twToken){flashErr('Log in with Twitch first.');return;}
+  modalAction={type:'warn',userId,username};
+  el('modalTitle').textContent='Warn '+username;
+  el('modalSub').textContent='Send an official Twitch warning to this user.';
+  el('modalBody').innerHTML=`<div><label>Reason</label><input type="text" id="modalReason" placeholder="Reason (optional)" maxlength="500"></div>`;
+  el('modalConfirmBtn').className='modal-confirm warn';
+  el('modalConfirmBtn').textContent='Send Warning';
+  el('modalOverlay').classList.add('open');
+  setTimeout(()=>el('modalReason')?.focus(),50);
+}
+
+function openTimeoutModal(userId, username){
+  if(!twToken){flashErr('Log in with Twitch first.');return;}
+  modalAction={type:'timeout',userId,username};
+  el('modalTitle').textContent='Timeout '+username;
+  el('modalSub').textContent='Temporarily prevent this user from chatting.';
+  const snaps=[1,30,60,300,600,1800,3600,7200,21600,43200,86400,259200,604800,1209600];
+  const snapLabels=['1s','30s','1m','5m','10m','30m','1h','2h','6h','12h','1d','3d','7d','14d'];
+  el('modalBody').innerHTML=`
+    <div>
+      <label>Duration</label>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <input type="range" id="toSlider" min="0" max="${snaps.length-1}" value="4" step="1" style="flex:1;accent-color:var(--twitch)" oninput="onToSlider()">
+        <input type="text" class="to-input" id="toInput" value="10m" oninput="onToInput()" placeholder="e.g. 10m">
+      </div>
+      <div class="to-snaps" id="toSnaps">
+        ${snaps.map((s,i)=>`<button class="to-snap${i===4?' active':''}" onclick="setToSnap(${i})">${snapLabels[i]}</button>`).join('')}
+      </div>
+    </div>
+    <div style="margin-top:10px"><label>Reason</label><input type="text" id="modalReason" placeholder="Reason (optional)" maxlength="500"></div>`;
+  el('modalConfirmBtn').className='modal-confirm to';
+  el('modalConfirmBtn').textContent='Timeout';
+  el('modalOverlay').classList.add('open');
+  window._toSnaps=snaps; window._toSnapIdx=4;
+  setTimeout(()=>el('modalReason')?.focus(),50);
+}
+
+function setToSnap(i){
+  window._toSnapIdx=i;
+  el('toSlider').value=i;
+  el('toInput').value=formatDuration(window._toSnaps[i]);
+  document.querySelectorAll('.to-snap').forEach((b,j)=>b.classList.toggle('active',j===i));
+}
+
+function onToSlider(){
+  const i=parseInt(el('toSlider').value);
+  setToSnap(i);
+}
+
+function onToInput(){
+  const raw=el('toInput').value.trim();
+  const s=parseDuration(raw);
+  if(!s) return;
+  // find nearest snap
+  const snaps=window._toSnaps||[];
+  let best=0,bestDiff=Infinity;
+  snaps.forEach((sv,i)=>{const d=Math.abs(sv-s);if(d<bestDiff){bestDiff=d;best=i;}});
+  window._toSnapIdx=best;
+  el('toSlider').value=best;
+  document.querySelectorAll('.to-snap').forEach((b,j)=>b.classList.toggle('active',j===best));
+}
+
+function parseDuration(str){
+  str=str.trim().toLowerCase();
+  const m=str.match(/^(\d+)\s*(s|sec|m|min|h|hr|d|day)?$/);
+  if(!m) return null;
+  const n=parseInt(m[1]);
+  const u=m[2]||'s';
+  if(u.startsWith('d')) return n*86400;
+  if(u.startsWith('h')) return n*3600;
+  if(u.startsWith('m')) return n*60;
+  return n;
+}
+
+function openBanModal(userId, username){
+  if(!twToken){flashErr('Log in with Twitch first.');return;}
+  modalAction={type:'ban',userId,username};
+  el('modalTitle').textContent='Ban '+username;
+  el('modalSub').textContent='Permanently ban this user from the channel.';
+  el('modalBody').innerHTML=`<div><label>Reason</label><input type="text" id="modalReason" placeholder="Reason (optional)" maxlength="500"></div>`;
+  el('modalConfirmBtn').className='modal-confirm ban';
+  el('modalConfirmBtn').textContent='Ban User';
+  el('modalOverlay').classList.add('open');
+  setTimeout(()=>el('modalReason')?.focus(),50);
+}
+
+function formatDuration(s){
+  if(s<60) return s+'s';
+  if(s<3600) return Math.round(s/60)+'m';
+  if(s<86400) return (s/3600).toFixed(1).replace('.0','')+'h';
+  return (s/86400).toFixed(1).replace('.0','')+'d';
+}
+
+function closeModal(){
+  el('modalOverlay').classList.remove('open');
+  modalAction=null;
+  const btn=el('modalConfirmBtn');
+  if(btn){btn.disabled=false;}
+}
+
+async function modalConfirm(){
+  if(!modalAction) return;
+  const reason=el('modalReason')?.value?.trim()||'';
+  const btn=el('modalConfirmBtn');
+  btn.disabled=true; btn.textContent='…';
+
+  try{
+    if(modalAction.type==='yt-timeout'){
+      const raw=el('toInput')?.value||'';
+      const dur=Math.max(1,Math.min(86400,parseDuration(raw)||window._toSnaps[window._toSnapIdx||4]||300));
+      await ytBanUser(modalAction.channelId, dur);
+      flashSuccess('Timed out '+modalAction.username+' for '+formatDuration(dur));
+      if(modalAction.channelId){if(!sessionActions[modalAction.channelId])sessionActions[modalAction.channelId]={timeouts:0,bans:0};sessionActions[modalAction.channelId].timeouts++;}
+      messages.filter(m=>m.platform==='youtube'&&m.author===modalAction.username).forEach(m=>syncDelete(m.id));
+      closeModal(); return;
+    }
+    if(modalAction.type==='yt-ban'){
+      await ytBanUser(modalAction.channelId, 0);
+      flashSuccess('Banned '+modalAction.username+' from YouTube chat');
+      if(modalAction.channelId){if(!sessionActions[modalAction.channelId])sessionActions[modalAction.channelId]={timeouts:0,bans:0};sessionActions[modalAction.channelId].bans++;}
+      messages.filter(m=>m.platform==='youtube'&&m.author===modalAction.username).forEach(m=>syncDelete(m.id));
+      closeModal(); return;
+    }
+    if(modalAction.type==='warn'){
+      await twFetch(`https://api.twitch.tv/helix/moderation/warnings?broadcaster_id=${twBroadcasterId}&moderator_id=${twUserId}`,{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({data:{user_id:modalAction.userId,reason:reason||'No reason provided'}})
+      });
+      flashSuccess('Warning sent to '+modalAction.username);
+    } else {
+      const body={user_id:modalAction.userId};
+      if(reason) body.reason=reason;
+      if(modalAction.type==='timeout'){
+        const raw=el('toInput')?.value||'';
+        const parsed=parseDuration(raw);
+        body.duration=Math.max(1,Math.min(1209600,parsed||window._toSnaps[window._toSnapIdx||4]||600));
+      }
+      await twFetch(`https://api.twitch.tv/helix/moderation/bans?broadcaster_id=${twBroadcasterId}&moderator_id=${twUserId}`,{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({data:body})
+      });
+      const label=modalAction.type==='timeout'?'Timed out':'Banned';
+      flashSuccess(label+' '+modalAction.username);
+      if(modalAction.userId){if(!sessionActions[modalAction.userId])sessionActions[modalAction.userId]={timeouts:0,bans:0};
+      if(modalAction.type==='timeout')sessionActions[modalAction.userId].timeouts++;
+      else sessionActions[modalAction.userId].bans++;}
+      // Also hide all their messages from streamer view
+      messages.filter(m=>m.platform==='twitch'&&m.author===modalAction.username).forEach(m=>syncDelete(m.id));
+    }
+    const _refreshName = modalAction.username;
+    closeModal();
+    refreshModButtons(_refreshName);
+  }catch(e){
+    flashErr('Action failed: '+e.message);
+    btn.disabled=false;
+    btn.textContent=modalAction.type==='warn'?'Send Warning':modalAction.type==='timeout'?'Timeout':'Ban User';
+  }
+}
+
+
+
+// ═══════ PROFILE PANEL ═══════
+let profileUser = null;
+
+function openProfile(id) {
+  const msg = msgMap.get(id); if(!msg) return;
+  profileUser = msg;
+  el('profilePanel').classList.add('open');
+  renderProfileShell(msg);
+  if (msg.platform === 'twitch') fetchTwitchProfile(msg);
+  else renderYoutubeProfile(msg);
+}
+
+function closeProfile() {
+  el('profilePanel').classList.remove('open');
+  profileUser = null;
+}
+
+function renderProfileShell(msg) {
+  el('ppHeader').innerHTML = `
+    <button class="pp-close" onclick="closeProfile()">✕</button>
+    <div class="pp-avatar-placeholder" style="color:${msg.color}">${esc(msg.author[0]||'?').toUpperCase()}</div>
+    <div class="pp-info">
+      <div class="pp-name">${esc(msg.author)}<span class="pp-platform ${msg.platform==='twitch'?'tw':'yt'}">${msg.platform==='twitch'?'TW':'YT'}</span></div>
+      <div class="pp-sub">Loading…</div>
+    </div>`;
+  el('ppBody').innerHTML = '<div class="pp-loading">Fetching profile…</div>';
+}
+
+async function fetchTwitchProfile(msg) {
+  if (!twToken) { renderProfileNoAuth(msg); return; }
+  try {
+    const [userRes, followRes, subRes, banRes] = await Promise.allSettled([
+      twFetch(`https://api.twitch.tv/helix/users?login=${encodeURIComponent(msg.author)}`),
+      twBroadcasterId ? twFetch(`https://api.twitch.tv/helix/channels/followers?broadcaster_id=${twBroadcasterId}&user_id=${msg.authorId||''}`) : Promise.resolve(null),
+      (twBroadcasterId && msg.authorId && twUserId===twBroadcasterId) ? twFetch(`https://api.twitch.tv/helix/subscriptions/user?broadcaster_id=${twBroadcasterId}&user_id=${msg.authorId}`).catch(()=>null) : Promise.resolve(null),
+      (twBroadcasterId && msg.authorId && twUserId===twBroadcasterId) ? twFetch(`https://api.twitch.tv/helix/moderation/bans?broadcaster_id=${twBroadcasterId}&user_id=${msg.authorId}`).catch(()=>({data:[]})) : Promise.resolve({data:[]})
+    ]);
+    const user = userRes.status==='fulfilled' ? userRes.value?.data?.[0] : null;
+    const followData = followRes.status==='fulfilled' ? followRes.value : null;
+    const subData = subRes.status==='fulfilled' ? subRes.value : null;
+    const banData = banRes.status==='fulfilled' ? banRes.value : null;
+    if (!user) { renderProfileNoAuth(msg); return; }
+
+    const followed = followData?.data?.[0];
+    const isSubbed = !!subData?.data?.[0];
+    const isBanned = !!(banData?.data?.[0]);
+    const created = new Date(user.created_at);
+    const createdStr = created.toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
+    const followedStr = followed ? new Date(followed.followed_at).toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'}) : null;
+    const isMod = mode === 'mod';
+
+    const subMonths = (() => {
+      const bm = messages.filter(x=>x.platform==='twitch'&&x.author===msg.author&&x.badgeInfoTag).pop();
+      if (!bm) return null;
+      const match = (bm.badgeInfoTag||'').match(/subscriber\/(\d+)/);
+      return match ? parseInt(match[1]) : null;
+    })();
+    const subLabel = subMonths !== null
+      ? (isSubbed ? `Subscribed for ${subMonths} month${subMonths!==1?'s':''}` : `Previously subbed for ${subMonths} month${subMonths!==1?'s':''}`)
+      : null;
+
+    const headerTags = [];
+    if (user.broadcaster_type==='partner') headerTags.push({cls:'partner',label:'Partner'});
+    if (user.broadcaster_type==='affiliate') headerTags.push({cls:'partner',label:'Affiliate'});
+    if (isBanned) headerTags.push({cls:'ban',label:'Banned'});
+
+    el('ppHeader').innerHTML = `
+      <button class="pp-close" onclick="closeProfile()">✕</button>
+      <img class="pp-avatar" src="${/^https:\/\//.test(user.profile_image_url)?user.profile_image_url:''}" alt="${esc(user.display_name)}">
+      <div class="pp-info">
+        <div class="pp-name">${esc(user.display_name)}<span class="pp-platform tw">TW</span></div>
+        <div class="pp-tags">
+          ${headerTags.map(t=>`<span class="pp-tag ${t.cls}">${t.label}</span>`).join('')}
+          <span class="pp-tag">Account created ${createdStr}</span>
+          ${followedStr ? `<span class="pp-tag mod">Following since ${followedStr}</span>` : '<span class="pp-tag">Not following</span>'}
+          ${subLabel ? `<span class="pp-tag sub">${subLabel}</span>` : ''}
+        </div>
+      </div>`;
+
+    const history = messages.filter(m=>m.platform==='twitch'&&m.author===msg.author);
+
+    el('ppBody').innerHTML = `
+      <a class="pp-ext-link" href="https://twitch.tv/${encodeURIComponent(user.login)}" target="_blank">↗ View Twitch channel</a>
+      ${isMod ? `<div>
+        <div class="pp-section-title">Moderation</div>
+        <div class="pp-mod-actions">
+          <div class="pp-mod-row">
+            <button class="pp-mod-btn warn" onclick="openWarnModal('${esc(msg.authorId||'')}','${esc(msg.author)}')">Warn</button>
+            ${(()=>{const ulow=msg.author.toLowerCase();const isTO=!!timedOutUsers[ulow]&&timedOutUsers[ulow].until>Date.now();return isTO?`<button class="pp-mod-btn unban" onclick="untimeoutUser('${esc(msg.authorId||'')}','${esc(msg.author)}')">Untimeout${toRemaining(ulow)}</button>`:`<button class="pp-mod-btn to" onclick="openTimeoutModal('${esc(msg.authorId||'')}','${esc(msg.author)}')">Timeout</button>`;})()}
+          </div>
+          <div class="pp-mod-row">
+            ${(()=>{const ulow=msg.author.toLowerCase();const isBan=bannedUsers.has(ulow);return isBan?`<button class="pp-mod-btn unban" onclick="unbanTwitchUser('${esc(msg.authorId||'')}','${esc(msg.author)}')">Unban</button>`:`<button class="pp-mod-btn ban" onclick="openBanModal('${esc(msg.authorId||'')}','${esc(msg.author)}')">Ban</button>`;})()}
+          </div>
+
+        </div>
+      </div>` : ''}
+      <div>
+        <div class="pp-section-title">Message history this session (${history.length})</div>
+        <div class="pp-history">${history.length ? history.map(m=>`<div class="pp-hist-msg${deletedIds.has(m.id)?' deleted-hist':''}">${esc(m.text)}</div>`).join('') : '<div class="pp-loading">No messages yet</div>'}</div>
+      </div>
+    `;
+  } catch(e) {
+    el('ppBody').innerHTML = `<div class="pp-loading">Failed to load profile</div>`;
+  }
+}
+
+function renderYoutubeProfile(msg) {
+  const history = messages.filter(m=>m.platform==='youtube'&&m.author===msg.author);
+  const isMod = mode === 'mod';
+  const channelId = msg.authorId||'';
+
+  el('ppHeader').innerHTML = `
+    <button class="pp-close" onclick="closeProfile()">✕</button>
+    <div class="pp-avatar-placeholder" style="color:#ff5555">${esc(msg.author[0]||'?').toUpperCase()}</div>
+    <div class="pp-info">
+      <div class="pp-name">${esc(msg.author)}<span class="pp-platform yt">YT</span></div>
+      ${channelId ? `<a class="pp-ext-link" href="https://youtube.com/channel/${encodeURIComponent(channelId)}" target="_blank" style="font-size:11px">↗ View YouTube channel</a>` : ''}
+    </div>`;
+
+  el('ppBody').innerHTML = `
+    ${isMod ? `<div>
+      <div class="pp-section-title">Moderation</div>
+      <div class="pp-mod-actions">
+        <div class="pp-mod-row">
+          <button class="pp-mod-btn to" onclick="openYtTimeoutModal('${esc(channelId)}','${esc(msg.author)}')">Timeout</button>
+          <button class="pp-mod-btn ban" onclick="openYtBanModal('${esc(channelId)}','${esc(msg.author)}')">Ban</button>
+        </div>
+
+      </div>
+    </div>` : ''}
+    <div>
+      <div class="pp-section-title">Message history this session (${history.length})</div>
+      <div class="pp-history">${history.length ? history.map(m=>`<div class="pp-hist-msg${deletedIds.has(m.id)?' deleted-hist':''}">${esc(m.text)}</div>`).join('') : '<div class="pp-loading">No messages yet</div>'}</div>
+    </div>
+  `;
+}
+
+function renderProfileNoAuth(msg) {
+  el('ppBody').innerHTML = `<div class="pp-loading">Log in with ${msg.platform==='twitch'?'Twitch':'Google'} to view full profile</div>`;
+  const history = messages.filter(m=>m.platform===msg.platform&&m.author===msg.author).slice(-30);
+  el('ppBody').innerHTML += `
+    <div>
+      <div class="pp-section-title">Message history this session (${history.length})</div>
+      <div class="pp-history">${history.map(m=>`<div class="pp-hist-msg">${esc(m.text)}</div>`).join('')}</div>
+    </div>`;
+}
+
+async function untimeoutUser(userId, username) {
+  if(!twToken){flashErr('Log in with Twitch first.');return;}
+  try{
+    await fetch(`https://api.twitch.tv/helix/moderation/bans?broadcaster_id=${twBroadcasterId}&moderator_id=${twUserId}&user_id=${userId}`,
+      {method:'DELETE',headers:{'Authorization':`Bearer ${twToken}`,'Client-Id':cfg.twCid}});
+    const ulow=(username||'').toLowerCase();
+    delete timedOutUsers[ulow];
+    flashSuccess('Removed timeout for '+username);
+    refreshModButtons(username);
+  }catch(e){flashErr('Untimeout failed: '+e.message);}
+}
+
+async function unbanTwitchUser(userId, username) {
+  if (!twToken) { flashErr('Log in with Twitch first.'); return; }
+  try {
+    await fetch(`https://api.twitch.tv/helix/moderation/bans?broadcaster_id=${twBroadcasterId}&moderator_id=${twUserId}&user_id=${userId}`,
+      { method:'DELETE', headers:{'Authorization':`Bearer ${twToken}`,'Client-Id':cfg.twCid} });
+    bannedUsers.delete((username||'').toLowerCase());
+    flashSuccess('Unbanned '+username);
+    refreshModButtons(username);
+  } catch(e) { flashErr('Unban failed: '+e.message); }
+}
+
+// Author click via event delegation (avoids inline onclick issues)
+el('chatArea').addEventListener('click', e => {
+  const replyBar = e.target.closest('.msg-reply-bar');
+  if(replyBar){
+    const targetId = replyBar.dataset.scrollto;
+    if(targetId) scrollToMsg(targetId);
+    return;
+  }
+  const author = e.target.closest('.msg-author');
+  if (author) {
+    const id = author.dataset.msgid;
+    if (id) openProfile(id);
+    return;
+  }
+});
+
+// Close profile panel when clicking outside
+document.addEventListener('click', e => {
+  const panel = el('profilePanel');
+  if (panel.classList.contains('open') && !panel.contains(e.target) && !e.target.closest('.msg-author')) {
+    closeProfile();
+  }
+});
+
+
+
+// Refresh action buttons for all visible messages from a given username
+function refreshModButtons(username){
+  if(mode!=='mod') return;
+  const area=document.getElementById('chatArea');
+  area.querySelectorAll('.msg').forEach(node=>{
+    const id=node.dataset.id;
+    const msg=msgMap.get(id);
+    if(!msg||msg.author!==username) return;
+    const actions=node.querySelector('.msg-actions');
+    if(!actions) return;
+    const tmp=document.createElement('div');
+    tmp.innerHTML=buildModActions(msg,deletedIds.has(msg.id));
+    actions.replaceWith(tmp.firstElementChild);
+  });
+}
+
+// ═══════ YOUTUBE MOD ACTIONS ═══════
+function openYtTimeoutModal(channelId, username){
+  if(!ytToken){flashErr('Log in with Google first.');return;}
+  modalAction={type:'yt-timeout',channelId,username};
+  el('modalTitle').textContent='Timeout '+username;
+  el('modalSub').textContent='Temporarily ban this user from YouTube chat (max 24h).';
+  const snaps=[1,30,60,300,600,1800,3600,7200,21600,43200,86400];
+  const snapLabels=['1s','30s','1m','5m','10m','30m','1h','2h','6h','12h','24h'];
+  el('modalBody').innerHTML=`
+    <div>
+      <label>Duration</label>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <input type="range" id="toSlider" min="0" max="${snaps.length-1}" value="3" step="1" style="flex:1;accent-color:var(--twitch)" oninput="onToSlider()">
+        <input type="text" class="to-input" id="toInput" value="5m" oninput="onToInput()" placeholder="e.g. 10m">
+      </div>
+      <div class="to-snaps" id="toSnaps">
+        ${snaps.map((s,i)=>`<button class="to-snap${i===3?' active':''}" onclick="setToSnap(${i})">${snapLabels[i]}</button>`).join('')}
+      </div>
+    </div>`;
+  el('modalConfirmBtn').className='modal-confirm to';
+  el('modalConfirmBtn').textContent='Timeout';
+  el('modalOverlay').classList.add('open');
+  window._toSnaps=snaps; window._toSnapIdx=3;
+}
+
+function openYtBanModal(channelId, username){
+  if(!ytToken){flashErr('Log in with Google first.');return;}
+  modalAction={type:'yt-ban',channelId,username};
+  el('modalTitle').textContent='Ban '+username;
+  el('modalSub').textContent='Permanently ban this user from YouTube chat.';
+  el('modalBody').innerHTML='';
+  el('modalConfirmBtn').className='modal-confirm ban';
+  el('modalConfirmBtn').textContent='Ban User';
+  el('modalOverlay').classList.add('open');
+}
+
+async function ytBanUser(channelId, durationSeconds){
+  if(!window.electronAPI) throw new Error('YouTube mod actions require the desktop app.');
+  if(durationSeconds){
+    const result = await window.electronAPI.timeoutYoutubeUser(channelId, durationSeconds);
+    if(!result.ok) throw new Error(result.error||'Timeout failed');
+  } else {
+    const result = await window.electronAPI.banYoutubeUser(channelId);
+    if(!result.ok) throw new Error(result.error||'Ban failed');
+  }
+}
+
+// Close modal on overlay click
+el('modalOverlay').addEventListener('click',e=>{if(e.target===el('modalOverlay'))closeModal();});
+
+
+
+// ═══════ REPLY ═══════
+function startReply(msg){
+  replyToMsg = msg;
+  const preview = msg.text.length>50 ? msg.text.slice(0,50)+'…' : msg.text;
+  el('replyIndicatorText').textContent = 'Replying to @'+msg.author+': '+preview;
+  el('replyIndicator').style.display = 'flex';
+  // Switch platform to match the message being replied to
+  if(msg.platform==='youtube' && sendPlatform!=='youtube') setPlatform('youtube');
+  if(msg.platform==='twitch' && sendPlatform!=='twitch') setPlatform('twitch');
+  // For YouTube, pre-fill @username if input is empty
+  if(msg.platform==='youtube'){
+    const inp=el('chatInput');
+    if(!inp.value.trim()) inp.value='@'+msg.author+' ';
+    setCaretToEnd();
+  }
+  el('chatInput').focus();
+}
+
+function cancelReply(){
+  // If the input still just has the auto-filled @mention, clear it
+  if(replyToMsg && replyToMsg.platform==='youtube'){
+    const inp=el('chatInput');
+    const prefill='@'+replyToMsg.author+' ';
+    if(inp.value===prefill) inp.value='';
+  }
+  replyToMsg = null;
+  el('replyIndicator').style.display = 'none';
+}
+
+function scrollToMsg(id){
+  const area = document.getElementById('chatArea');
+  const node = area.querySelector(`.msg[data-id="${CSS.escape(id)}"]`);
+  if(!node) return;
+  node.scrollIntoView({behavior:'smooth', block:'center'});
+  node.classList.remove('reply-highlight');
+  void node.offsetWidth; // force reflow to restart animation
+  node.classList.add('reply-highlight');
+  setTimeout(()=>node.classList.remove('reply-highlight'), 1000);
+}
+
+// ═══════ CONTEXT MENU ═══════
+let ctxTarget = null;
+
+el('chatArea').addEventListener('contextmenu', e => {
+  if(mode !== 'mod') return;
+  const msgEl = e.target.closest('.msg');
+  if(!msgEl) return;
+  e.preventDefault();
+  const id = msgEl.dataset.id;
+  const msg = msgMap.get(id);
+  if(!msg) return;
+  ctxTarget = msg;
+  showCtxMenu(e.clientX, e.clientY, msg);
+});
+
+function showCtxMenu(x, y, msg){
+  const menu = el('ctxMenu');
+  const isDel = deletedIds.has(msg.id);
+  const preview = msg.text.length > 40 ? msg.text.slice(0,40)+'…' : msg.text;
+  menu.innerHTML = `
+    <div class="ctx-preview">${esc(preview)}</div>
+    <div class="ctx-sep"></div>
+    <div class="ctx-item" data-action="reply">Reply</div>
+    <div class="ctx-sep"></div>
+    ${!isDel ? '<div class="ctx-item danger" data-action="delete">Delete message</div>' : '<div class="ctx-item" style="opacity:.4;cursor:default">Already deleted</div>'}
+    <div class="ctx-sep"></div>
+    <div class="ctx-item" data-action="profile">View profile</div>
+  `;
+  menu.style.display = 'block';
+  const vw = window.innerWidth, vh = window.innerHeight;
+  const mw = 220, mh = 120;
+  menu.style.left = (x + mw > vw ? vw - mw - 8 : x) + 'px';
+  menu.style.top  = (y + mh > vh ? vh - mh - 8 : y) + 'px';
+}
+
+el('ctxMenu').addEventListener('click', e => {
+  const item = e.target.closest('[data-action]');
+  if(!item || !ctxTarget) return;
+  e.stopPropagation();
+  const action = item.dataset.action;
+  if(action === 'reply'){ startReply(ctxTarget); }
+  if(action === 'delete'){ handleDelete(ctxTarget.id, ctxTarget.platform, null, ctxTarget.authorId, ctxTarget.text); }
+  if(action === 'profile'){ openProfile(ctxTarget.id); }
+  closeCtx();
+});
+
+function closeCtx(){
+  el('ctxMenu').style.display = 'none';
+  ctxTarget = null;
+}
+
+document.addEventListener('click', e => { if(!el('ctxMenu').contains(e.target)) closeCtx(); });
+document.addEventListener('keydown', e => { if(e.key==='Escape') closeCtx(); });
+
+
+// ═══════ SCROLL TO BOTTOM BUTTON ═══════
+let userScrolledUp = false;
+
+document.getElementById('chatArea').addEventListener('wheel', ()=>{
+  const area = document.getElementById('chatArea');
+  const atBottom = area.scrollHeight - area.scrollTop - area.clientHeight < 80;
+  userScrolledUp = !atBottom;
+  el('scrollToBottomBtn').classList.toggle('visible', userScrolledUp);
+});
+
+// Also handle touch/scrollbar drags via a debounced scroll listener
+let _scrollDebounce = null;
+document.getElementById('chatArea').addEventListener('scroll', ()=>{
+  clearTimeout(_scrollDebounce);
+  _scrollDebounce = setTimeout(()=>{
+    const area = document.getElementById('chatArea');
+    const atBottom = area.scrollHeight - area.scrollTop - area.clientHeight < 80;
+    if(atBottom){ userScrolledUp = false; el('scrollToBottomBtn').classList.remove('visible'); }
+  }, 150);
+});
+
+function scrollToBottom(){
+  userScrolledUp = false;
+  const area = document.getElementById('chatArea');
+  area.scrollTop = area.scrollHeight;
+  el('scrollToBottomBtn').classList.remove('visible');
+}
+
+function renderLoop(){renderMessages();requestAnimationFrame(renderLoop);}
+
+// ═══════ HELPERS ═══════
+function logoutTwitch(){
+  twToken=null; twUserId=null; twBroadcasterId=null;
+  sessionStorage.removeItem('tw_token');
+  // Token-based auth — no login button to reset
+  el('tw-username').className='auth-username';
+  sessionStorage.removeItem('tw_display_name');
+  updateSendUI();
+}
+function logoutYoutube(){
+  ytToken=null;
+  sessionStorage.removeItem('yt_token');
+  el('auth-yt-btn').className='auth-btn auth-yt';
+  el('auth-yt-btn').textContent='Login with Google';
+  el('auth-yt-btn').onclick=connectYoutube;
+  el('logout-yt-btn').className='logout-btn';
+  ytDisplayName=null;
+  el('yt-username').className='auth-username';
+  sessionStorage.removeItem('yt_display_name');
+  updateSendUI();
+}
+
+// ═══════ UPDATES ═══════════════════════════════════════════════════
+let updateDownloaded = false;
+
+async function initUpdateSettings(){
+  if(!window.electronAPI) return;
+  const enabled = await window.electronAPI.getAutoUpdateEnabled();
+  el('autoUpdateToggle').checked = enabled;
+  el('autoUpdateLabel').textContent = enabled ? 'On' : 'Off';
+}
+
+function setAutoUpdate(enabled){
+  if(!window.electronAPI) return;
+  window.electronAPI.setAutoUpdateEnabled(enabled);
+  el('autoUpdateLabel').textContent = enabled ? 'On' : 'Off';
+}
+
+async function manualCheckUpdate(){
+  if(!window.electronAPI) return;
+  const btn = el('checkUpdateBtn');
+  const msg = el('updateStatusMsg');
+  btn.disabled = true;
+  btn.textContent = 'Checking…';
+  msg.textContent = '';
+  await window.electronAPI.checkForUpdates();
+  btn.disabled = false;
+  btn.textContent = 'Check for Updates';
+}
+
+function handleUpdateInstall(){
+  if(updateDownloaded){
+    window.electronAPI.installUpdate();
+  } else {
+    // Download first
+    el('updateInstallBtn').textContent = 'Downloading…';
+    el('updateInstallBtn').disabled = true;
+    window.electronAPI.downloadUpdate();
+  }
+}
+
+if(window.electronAPI){
+  window.electronAPI.onUpdateStatus(data => {
+    const msg = el('updateStatusMsg');
+    const banner = el('updateBanner');
+    if(data.type === 'checking'){
+      if(msg) msg.textContent = 'Checking…';
+    } else if(data.type === 'not-available'){
+      if(msg) msg.textContent = '';
+      // Show a brief banner just like update-available, but green-tinted
+      el('updateBannerTitle').textContent = "✓ You're up to date";
+      el('updateBannerBody').textContent = 'No updates available right now.';
+      el('updateInstallBtn').style.display = 'none';
+      banner.style.borderColor = 'var(--ok, #57d679)';
+      banner.classList.add('visible');
+      setTimeout(() => {
+        banner.classList.remove('visible');
+        el('updateInstallBtn').style.display = '';
+        banner.style.borderColor = '';
+      }, 4000);
+    } else if(data.type === 'available'){
+      // Show update banner
+      el('updateBannerTitle').textContent = `Update Available — v${data.version}`;
+      el('updateBannerBody').textContent = 'A new version is ready to download.';
+      el('updateInstallBtn').textContent = 'Download & Install';
+      updateDownloaded = false;
+      banner.classList.add('visible');
+      if(msg) msg.textContent = `v${data.version} available`;
+    } else if(data.type === 'progress'){
+      el('updateInstallBtn').textContent = `Downloading… ${data.percent}%`;
+    } else if(data.type === 'downloaded'){
+      updateDownloaded = true;
+      el('updateBannerTitle').textContent = `Ready to Install — v${data.version}`;
+      el('updateBannerBody').textContent = 'Downloaded. Restart to apply the update.';
+      el('updateInstallBtn').textContent = 'Install & Restart';
+      el('updateInstallBtn').disabled = false;
+      banner.classList.add('visible');
+      if(msg) msg.textContent = `v${data.version} ready to install`;
+    } else if(data.type === 'error'){
+      if(msg) msg.textContent = 'Update check failed';
+      console.warn('[update error]', data.message);
+    }
+  });
+  // Load settings when setup page is shown
+  initUpdateSettings();
+}
+
+function goToSettings(){
+  // Snapshot current config so launch() can detect what changed
+  el('setup').dataset.prevCfg = JSON.stringify(cfg);
+  el('setup').dataset.prevMode = mode;
+  // Hide app, show setup (fixed overlay - no layout conflict)
+  el('app').style.display='none';
+  el('setup').style.display='flex';
+}
+
+function resetSession(){
+  // Full teardown — called only when config actually changes
+  if(twitchWs){try{twitchWs.close();}catch{} twitchWs=null;}
+  if(window.electronAPI) window.electronAPI.closeYoutubeChat();
+  sessionStorage.clear();
+  messages=[]; deletedIds=new Set(); ownMessageIds=new Set();
+  twToken=null; twUserId=null; twBroadcasterId=null; twDisplayName=null;
+  ytToken=null; ytDisplayName=null; ytChatId=null; ytNextPage=null;
+  pingMessageIds=new Set(); twUserList.clear(); ytUserList.clear();
+  el('tw-username').className='auth-username'; el('tw-username').textContent='';
+  el('auth-yt-btn').className='auth-btn auth-yt'; el('auth-yt-btn').textContent='Connect YouTube';
+  el('auth-yt-btn').onclick=connectYoutube; el('auth-yt-btn').disabled=false;
+  el('logout-yt-btn').className='logout-btn';
+  el('yt-username').className='auth-username'; el('yt-username').textContent='';
+}
+
+function origin(){return window.location.href.split('#')[0].split('?')[0];}
+function el(id){return document.getElementById(id);}
+function cls(id,c){el(id).className=c;}
+function showBanner(id){el(id).style.display='flex';}
+function dot(id,s){const e=el(id);if(!e)return;e.className='dc'+(s==='ok'?' ok':s==='spin'?' spin':s==='err'?' err':'');}
+function setBtn(btn,c,text){if(!btn)return;btn.className='mod-btn del'+(c?' '+c:'');btn.textContent=text;btn.disabled=c==='pending';}
+let errTimer=null;
+function flashSuccess(msg){const b=el('bn-err');b.style.color='var(--green)';b.textContent='✓ '+msg;b.style.display='flex';clearTimeout(errTimer);errTimer=setTimeout(()=>{b.style.display='none';b.style.color='';},3000);}
+function flashErr(msg){const b=el('bn-err');const clean=String(msg).replace(/<[^>]*>/g,'');b.textContent='⚠ '+clean;b.style.display='flex';clearTimeout(errTimer);errTimer=setTimeout(()=>{b.style.display='none';},5000);}
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function safeUrl(u){return(typeof u==='string'&&/^https:\/\//.test(u))?u:'';}
+function linkify(text){
+  // Split on URLs, alternating plain/url segments
+  const URL_RE=/https?:\/\/[^\s<>"']+|www\.[a-zA-Z0-9\-]+\.[a-zA-Z]{2,}[^\s<>"']*/gi;
+  const parts=[];
+  let last=0, m;
+  while((m=URL_RE.exec(text))!==null){
+    if(m.index>last) parts.push({t:'text',v:text.slice(last,m.index)});
+    const raw=m[0];
+    const href=raw.startsWith('http')?raw:'https://'+raw;
+    // Only allow http/https
+    if(/^https?:\/\//i.test(href)) parts.push({t:'link',raw,href});
+    else parts.push({t:'text',v:raw});
+    last=m.index+raw.length;
+  }
+  if(last<text.length) parts.push({t:'text',v:text.slice(last)});
+  return parts.map(p=>p.t==='text'?esc(p.v):`<a class="chat-link" href="${esc(p.href)}" target="_blank" rel="noopener noreferrer">${esc(p.raw)}</a>`).join('');
+}
+const _cc={};
+function rndColor(name){
+  if(_cc[name])return _cc[name];
+  const c=['#ff7b72','#79c0ff','#56d364','#e3b341','#d2a8ff','#ff9bce','#ffa657','#58a6ff','#3dc9b0'];
+  return(_cc[name]=c[name.split('').reduce((a,ch)=>a+ch.charCodeAt(0),0)%c.length]);
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,49 @@
+{
+  "name": "stream-chat",
+  "version": "1.0.0",
+  "description": "Combined Twitch + YouTube chat for streamers and mods",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build:win": "electron-builder --win",
+    "build:mac": "electron-builder --mac",
+    "build:linux": "electron-builder --linux",
+    "release": "electron-builder --win --publish always"
+  },
+  "dependencies": {
+    "puppeteer-core": "^24.0.0",
+    "electron-updater": "^6.1.0"
+  },
+  "config": {
+    "puppeteer_skip_chromium_download": true
+  },
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.0.0"
+  },
+  "build": {
+    "appId": "com.streamchat.app",
+    "productName": "Stream Chat",
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer/**/*"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "renderer/icon.ico"
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "renderer/icon.icns"
+    },
+    "linux": {
+      "target": "AppImage"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "AnimeGrils",
+      "repo": "stream-chat"
+    }
+  }
+}
