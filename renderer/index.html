@@ -1353,7 +1353,13 @@ async function loadRecentTwitchMsgs(channel){
     const r=await fetch(`https://recent-messages.robotty.de/api/v2/recent-messages/${channel}?limit=150`);
     if(!r.ok) return;
     const data=await r.json();
-    (data.messages||[]).forEach(line=>{ if(line.includes('PRIVMSG')) parseTwitchMsg(line); });
+    const cutoff=Date.now()-30*60*1000;
+    (data.messages||[]).forEach(line=>{
+      if(!line.includes('PRIVMSG')) return;
+      const m=line.match(/tmi-sent-ts=(\d+)/);
+      if(m&&parseInt(m[1])<cutoff) return;
+      parseTwitchMsg(line);
+    });
   }catch(e){}
 }
 
@@ -1365,7 +1371,7 @@ function parseTags(line){
 }
 function parseTwitchMsg(line){
   const tags=parseTags(line);
-  const match=line.match(/PRIVMSG #\S+ :(.+)$/);
+  const match=line.match(/PRIVMSG #\S+ :?(.+)$/);
   if(!match) return;
   const nick=(line.match(/:(\w+)!/)||[])[1]||'anon';
   const id=tags['id']||('tw-'+Date.now()+Math.random().toString(36).slice(2));
