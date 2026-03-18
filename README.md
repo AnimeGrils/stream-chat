@@ -35,9 +35,7 @@ Update your Firebase rules to include the YouTube bridge paths:
 {
   "rules": {
     "stream-chat": {
-      "deleted":   { ".read": true, ".write": true },
-      "yt-msgs":   { ".read": true, ".write": true },
-      "yt-leader": { ".read": true, ".write": true }
+      "deleted": { ".read": true, ".write": true }
     }
   }
 }
