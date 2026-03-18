@@ -107,6 +107,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
 .msg.msg-deleted{opacity:.45}
 .msg.msg-deleted .msg-text{text-decoration:line-through}
 .msg.msg-ping{background:rgba(255,170,68,.22)}
+.msg.msg-announcement{background:rgba(145,70,255,.07)}
+.announce-tag{display:inline-block;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;padding:1px 5px;border-radius:3px;margin-right:5px;vertical-align:middle}
 .msg-text a.chat-link{color:var(--twitch);text-decoration:underline;text-underline-offset:2px;word-break:break-all}
 .msg-text a.chat-link:hover{color:var(--text)}
 .msg.yt .msg-text a.chat-link{color:var(--youtube)}
@@ -221,6 +223,48 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
 .send-btn:disabled{opacity:.4;cursor:default}
 .send-btn.yt-send{background:var(--youtube)}
 
+/* ── COMMANDS ── */
+.cmd-btn{background:var(--surface2);border:1px solid var(--border);border-radius:6px;width:34px;height:34px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:15px;transition:all .12s;flex-shrink:0}
+.cmd-btn:hover{background:var(--surface3);border-color:var(--muted)}
+.cmd-btn.active{border-color:var(--twitch);background:rgba(145,70,255,.12)}
+.cmd-dropdown{position:absolute;bottom:calc(100% + 4px);left:0;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:4px 0;min-width:220px;display:none;z-index:200;box-shadow:0 4px 16px rgba(0,0,0,.4)}
+.cmd-dropdown.open{display:block}
+.cmd-item{padding:8px 14px;font-size:13px;cursor:pointer;color:var(--text);transition:background .1s;display:flex;align-items:center;gap:10px}
+.cmd-item:hover{background:var(--surface2)}
+.cmd-icon{font-size:14px;width:18px;text-align:center;flex-shrink:0}
+.cmd-label-sub{font-size:10px;color:var(--muted);margin-left:auto}
+.poll-choice-row{display:flex;align-items:center;gap:6px;margin-bottom:6px}
+.poll-choice-row input{flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:7px 10px;color:var(--text);font-family:var(--mono);font-size:12px;outline:none;transition:border-color .15s}
+.poll-choice-row input:focus{border-color:var(--twitch)}
+.poll-choice-rm{background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:16px;line-height:1;padding:2px 4px;flex-shrink:0}.poll-choice-rm:hover{color:var(--del)}
+.add-choice-btn{background:transparent;border:1px dashed var(--border);border-radius:6px;color:var(--muted);font-size:12px;padding:5px 10px;cursor:pointer;width:100%;font-family:var(--font);transition:all .12s;margin-top:2px}
+.add-choice-btn:hover{border-color:var(--twitch);color:var(--text)}
+.cmd-section{padding:4px 14px 2px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.chat-mode-row{display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border)}
+.chat-mode-row:last-child{border-bottom:none}
+.chat-mode-label{font-size:13px;color:var(--text)}
+.chat-mode-sub{font-size:11px;color:var(--muted);margin-top:1px}
+.chat-mode-right{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.cm-toggle{width:36px;height:20px;background:var(--surface3);border:1px solid var(--border);border-radius:10px;cursor:pointer;position:relative;transition:background .15s;flex-shrink:0}
+.cm-toggle.on{background:var(--twitch);border-color:var(--twitch)}
+.cm-toggle::after{content:'';position:absolute;top:2px;left:2px;width:14px;height:14px;background:#fff;border-radius:50%;transition:transform .15s}
+.cm-toggle.on::after{transform:translateX(16px)}
+.cm-input{background:var(--surface2);border:1px solid var(--border);border-radius:5px;color:var(--text);font-family:var(--mono);font-size:12px;padding:3px 7px;width:60px;outline:none;text-align:center}
+.cm-input:focus{border-color:var(--twitch)}
+.color-opts{display:flex;gap:8px;margin-top:8px}
+.color-opt{width:26px;height:26px;border-radius:50%;cursor:pointer;border:2px solid transparent;transition:border-color .12s;flex-shrink:0}
+.color-opt:hover{border-color:rgba(255,255,255,.5)}
+.color-opt.sel{border-color:#fff}
+.game-wrap{position:relative}
+.game-results{position:absolute;top:100%;left:0;right:0;background:var(--surface);border:1px solid var(--border);border-radius:0 0 7px 7px;max-height:160px;overflow-y:auto;z-index:20;display:none}
+.game-results.open{display:block}
+.game-result{padding:7px 12px;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:8px;color:var(--text)}
+.game-result:hover{background:var(--surface2)}
+.game-result img{width:20px;height:27px;object-fit:cover;border-radius:2px;flex-shrink:0}
+.manage-outcome{padding:9px 12px;border-radius:7px;margin-bottom:7px;cursor:pointer;border:1px solid var(--border);transition:all .12px;font-size:13px}
+.manage-outcome:hover{border-color:var(--twitch);background:rgba(145,70,255,.1)}
+.manage-outcome .oc-title{font-weight:600}
+.manage-outcome .oc-stats{font-size:11px;color:var(--muted);margin-top:2px}
 
 /* ── PROFILE PANEL ── */
 .profile-panel{position:fixed;top:0;right:-420px;width:380px;height:100vh;background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column;z-index:500;transition:right .25s cubic-bezier(.4,0,.2,1);overflow:hidden}
@@ -295,6 +339,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
     <button class="btn" style="width:100%;background:var(--twitch);color:#fff;font-size:12px;padding:7px 0" onclick="getTwitchToken()">Get Twitch Token</button>
   </div>
   <div class="field field-secret"><label>Twitch Token</label><input id="twClientId" type="password" oninput="saveField(this)" onpaste="extractTwitchToken(event)" placeholder="Click above to generate, or paste manually"><button type="button" class="eye-btn" onclick="toggleSecret(this)" title="Show/hide"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+  <div class="field field-secret" style="margin-top:8px"><label>Broadcaster Token <span class="b-opt">polls · predictions · stream info</span></label><input id="twBcToken" type="password" oninput="saveField(this)" onpaste="extractBcToken(event)" placeholder="Optional — click below to generate"><button type="button" class="eye-btn" onclick="toggleSecret(this)" title="Show/hide"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+  <div class="field" style="margin-top:-4px">
+    <button class="btn" style="width:100%;background:var(--surface3);border:1px solid var(--border);color:var(--muted);font-size:12px;padding:7px 0" onclick="getBroadcasterToken()">Get Broadcaster Token</button>
+    <p style="font-size:11px;color:var(--muted);margin-top:6px;line-height:1.5">The streamer generates this once and shares it with mods. It only works for polls, predictions and stream info — it cannot send messages.</p>
+  </div>
 
   <div class="sec"><span class="badge b-yt">YouTube</span><span class="b-opt">optional</span></div>
   <div class="field"><label>YouTube Channel</label><input id="ytVideoId" oninput="saveField(this)" placeholder="@channelname, channel ID or live URL"></div>
@@ -364,6 +413,20 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
       <div class="emote-search"><input type="text" id="emoteSearch" placeholder="Search emotes…" oninput="filterEmotes()" placeholder="Search emotes (Twitch + 7TV)…"></div>
       <div class="emote-grid" id="emoteGrid"><div class="emote-loading">Loading emotes…</div></div>
     </div>
+    <div class="cmd-dropdown" id="cmdDropdown">
+      <div class="cmd-section">Broadcaster</div>
+      <div class="cmd-item" onclick="openPollModal()"><span class="cmd-icon">📊</span>Create Poll</div>
+      <div class="cmd-item" onclick="openManagePollModal()"><span class="cmd-icon">📋</span>Manage Poll</div>
+      <div class="cmd-item" onclick="openPredictionModal()"><span class="cmd-icon">🎯</span>Create Prediction</div>
+      <div class="cmd-item" onclick="openManagePredictionModal()"><span class="cmd-icon">📋</span>Manage Prediction</div>
+      <div class="cmd-item" onclick="openStreamInfoModal()"><span class="cmd-icon">🎬</span>Edit Stream Info</div>
+      <div class="cmd-item" onclick="openRaidModal()"><span class="cmd-icon">🚀</span>Start Raid</div>
+      <div class="cmd-sep"></div>
+      <div class="cmd-section">Mod Actions</div>
+      <div class="cmd-item" onclick="openAnnouncementModal()"><span class="cmd-icon">📣</span>Announcement</div>
+      <div class="cmd-item" onclick="openShoutoutModal()"><span class="cmd-icon">👏</span>Shoutout</div>
+      <div class="cmd-item" onclick="openChatModesModal()"><span class="cmd-icon">💬</span>Chat Modes</div>
+    </div>
     <div class="ac-dropdown" id="acDropdown"></div>
     <button class="scroll-to-bottom" id="scrollToBottomBtn" onclick="scrollToBottom()">
       <span class="stb-idle">⏸ Chat paused due to scroll</span>
@@ -377,6 +440,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
       </div>
       <input class="chat-input" id="chatInput" placeholder="Send a message…" onkeydown="onInputKey(event)" oninput="onChatInput(event)" autocomplete="off" spellcheck="false">
       <button class="emote-toggle-btn" id="emoteToggleBtn" onclick="toggleEmotePicker()" title="Emotes">😊</button>
+      <button class="cmd-btn" id="cmdBtn" onclick="toggleCmdDropdown()" title="Commands">⚡</button>
       <button class="send-btn" id="sendBtn" onclick="sendMessage()">Send</button>
     </div>
   </div>
@@ -424,7 +488,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
 <script>
 
 // ═══════ PERSIST SETUP FIELDS ═══════
-const SETUP_FIELDS = ['fbUrl','fbKey','twChannel','twClientId','twClientId2','delaySeconds','ytVideoId'];
+const SETUP_FIELDS = ['fbUrl','fbKey','twChannel','twClientId','twClientId2','delaySeconds','ytVideoId','twBcToken'];
 
 function toggleSecret(btn){
   const wrap = btn.closest('.field-secret');
@@ -455,6 +519,15 @@ function initSecretFields(){
 
 document.addEventListener('DOMContentLoaded', initSecretFields);
 
+function extractBcToken(e){
+  setTimeout(()=>{
+    const inp=el('twBcToken');
+    const val=inp.value;
+    const match=val.match(/[#&]?access_token=([a-zA-Z0-9]+)/);
+    if(match){ inp.value=match[1]; saveField(inp); }
+  },0);
+}
+
 function extractTwitchToken(e){
   // If someone pastes a full URL, extract just the token
   setTimeout(()=>{
@@ -471,9 +544,21 @@ function extractTwitchToken(e){
 function getTwitchToken(){
   const cid = document.getElementById('twClientId2').value.trim();
   if(!cid){ alert('Enter your Client ID first.'); return; }
-  const scopes = 'moderator:manage:chat_messages+user:write:chat+moderator:manage:banned_users+moderator:manage:warnings+moderator:read:followers+channel:read:subscriptions';
+  const scopes = 'moderator:manage:chat_messages+user:write:chat+moderator:manage:banned_users+moderator:manage:warnings+moderator:read:followers+channel:read:subscriptions+moderator:manage:chat_settings+moderator:manage:shoutouts+moderator:manage:announcements+channel:manage:raids';
   const url = `https://id.twitch.tv/oauth2/authorize?client_id=${encodeURIComponent(cid)}&redirect_uri=http://localhost&response_type=token&scope=${scopes}`;
   // Open in default system browser
+  if(window.electronAPI && window.electronAPI.openExternal){
+    window.electronAPI.openExternal(url);
+  } else {
+    window.open(url, '_blank');
+  }
+}
+
+function getBroadcasterToken(){
+  const cid = document.getElementById('twClientId2').value.trim();
+  if(!cid){ alert('Enter your Client ID first.'); return; }
+  const scopes = 'channel:manage:polls+channel:manage:predictions+channel:manage:broadcast';
+  const url = `https://id.twitch.tv/oauth2/authorize?client_id=${encodeURIComponent(cid)}&redirect_uri=http://localhost&response_type=token&scope=${scopes}`;
   if(window.electronAPI && window.electronAPI.openExternal){
     window.electronAPI.openExternal(url);
   } else {
@@ -500,7 +585,7 @@ let DELAY = 6000;
 let mode='streamer', cfg={}, messages=[], deletedIds=new Set();
 let fbRef=null, twitchWs=null;
 const ytTabId=Math.random().toString(36).slice(2); // unique per tab
-let twToken=null, twUserId=null, twBroadcasterId=null, twDisplayName=null, ytToken=null;
+let twToken=null, twUserId=null, twBroadcasterId=null, twDisplayName=null, ytToken=null, twBcToken=null;
 const timedOutUsers={}; // username.lower -> {until: ms, duration: s}
 const bannedUsers=new Set(); // username.lower
 let ownMessageIds=new Set();
@@ -527,13 +612,13 @@ const ytUserList = new Map();
 
 // ═══════ SETUP ═══════
 function launch(m){
-  const fbUrl=v('fbUrl'),fbKey=v('fbKey'),twCh=v('twChannel'),twToken_=v('twClientId'),twCid=v('twClientId2'),ytVid=v('ytVideoId');
+  const fbUrl=v('fbUrl'),fbKey=v('fbKey'),twCh=v('twChannel'),twToken_=v('twClientId'),twCid=v('twClientId2'),ytVid=v('ytVideoId'),twBcToken_=v('twBcToken');
   const delaySec=v('delaySeconds');
   if(!twCh){alert('Enter a Twitch channel name.');return;}
   if(!twToken_){alert('Enter your Twitch OAuth token.');return;}
   if((!fbUrl||!fbKey)&&!confirm('Firebase not configured — deletions won\'t sync across devices. Continue?'))return;
 
-  const newCfg={fbUrl,fbKey,twCh:twCh.toLowerCase(),twCid,twToken:twToken_,ytVid,delay:delaySec?parseFloat(delaySec)*1000:6000};
+  const newCfg={fbUrl,fbKey,twCh:twCh.toLowerCase(),twCid,twToken:twToken_,ytVid,twBcToken:twBcToken_,delay:delaySec?parseFloat(delaySec)*1000:6000};
 
   // Check what changed vs the previous config (if returning from settings)
   let prevCfg = null;
@@ -556,6 +641,7 @@ function launch(m){
   if(needsFullReset){
     resetSession();
     if(twToken_){ twToken=twToken_; sessionStorage.setItem('tw_token', twToken_); }
+    if(twBcToken_) twBcToken=twBcToken_;
     if(twCh) twUserList.set(twCh.toLowerCase(), twCh);
     DELAY=cfg.delay;
     mode=m;
@@ -603,6 +689,8 @@ function initApp(){
     twToken=savedTwToken; sessionStorage.setItem('tw_token',savedTwToken);
     cfg.twCid=localStorage.getItem('sc_twClientId2')||cfg.twCid||'';
   }
+  const savedBcToken=localStorage.getItem('sc_twBcToken');
+  if(savedBcToken) twBcToken=savedBcToken;
   const savedTw=sessionStorage.getItem('tw_token');
   const savedYt=null; // YouTube uses Electron scraper, no OAuth token
   const savedTwName=sessionStorage.getItem('tw_display_name');
@@ -697,7 +785,14 @@ async function onTwitchAuthed(){
 }
 async function twFetch(url,opts={}){
   const r=await fetch(url,{...opts,headers:{'Authorization':`Bearer ${twToken}`,'Client-Id':cfg.twCid||'',...(opts.headers||{})}});
-  if(!r.ok) throw new Error(r.status);
+  if(!r.ok){const j=await r.json().catch(()=>({}));throw new Error(j.message||r.status);}
+  if(r.status===204) return {};
+  return r.json();
+}
+async function bcFetch(url,opts={}){
+  if(!twBcToken) throw new Error('Broadcaster token not set — add one in Settings.');
+  const r=await fetch(url,{...opts,headers:{'Authorization':`Bearer ${twBcToken}`,'Client-Id':cfg.twCid||'',...(opts.headers||{})}});
+  if(!r.ok){const j=await r.json().catch(()=>({}));throw new Error(j.message||r.status);}
   if(r.status===204) return {};
   return r.json();
 }
@@ -900,7 +995,11 @@ function onInputKey(e){
     if(e.key==='Tab'||e.key==='Enter'){
       e.preventDefault();
       const sel=ac.querySelector('.ac-item.selected')||ac.querySelector('.ac-item');
-      if(sel){ const name=sel.querySelector('.ac-name')?.textContent; if(name){ if(acMode==='user') commitUserAc(name); else commitAc(name); } return; }
+      if(sel){ const name=sel.querySelector('.ac-name')?.textContent; if(name){
+        if(acMode==='user') commitUserAc(name);
+        else if(acMode==='command'){ const cmd=SLASH_COMMANDS.find(c=>c.cmd===name); if(cmd) commitCommandAc(cmd); }
+        else commitAc(name);
+      } return; }
     }
     if(e.key==='Escape'){closeAc();return;}
   }
@@ -1094,9 +1193,13 @@ function onChatInput(e){
   const val = getChatText();
   const cursor = getCaretTextOffsetSimple();
   const textToCursor = val.slice(0, cursor);
+  const slashMatch = val.match(/^\/([\w]*)$/);
   const mentionMatch = textToCursor.match(/@([a-zA-Z0-9_]*)$/);
   const colonMatch = textToCursor.match(/:([a-zA-Z0-9_]*)$/);
-  if(mentionMatch && mentionMatch[1].length >= 1){
+  if(slashMatch){
+    acMode = 'command';
+    showCommandAc('/'+slashMatch[1]);
+  } else if(mentionMatch && mentionMatch[1].length >= 1){
     acMode = 'user';
     showUserAc(mentionMatch[1]);
   } else if(colonMatch && colonMatch[1].length >= 2){
@@ -1218,9 +1321,10 @@ function connectTwitch(){
       if(!line) continue;
       if(line==='PING :tmi.twitch.tv'){twitchWs.send('PONG :tmi.twitch.tv');continue;}
       if(line.includes('366')||line.includes('JOIN #')){ dot('d-tw','ok'); loadRecentTwitchMsgs(cfg.twCh); }
-      if(line.includes('PRIVMSG'))   parseTwitchMsg(line);
-      if(line.includes('CLEARMSG'))  parseClearMsg(line);
-      if(line.includes('CLEARCHAT')) parseClearChat(line);
+      if(line.includes('PRIVMSG'))    parseTwitchMsg(line);
+      if(line.includes('USERNOTICE')) parseTwitchUserNotice(line);
+      if(line.includes('CLEARMSG'))   parseClearMsg(line);
+      if(line.includes('CLEARCHAT'))  parseClearChat(line);
     }
   };
   twitchWs.onerror=()=>dot('d-tw','err');
@@ -1260,6 +1364,21 @@ function parseTwitchMsg(line){
     text:match[1],emotesTag:tags['emotes']||'',authorId:tags['user-id']||null,badgesTag:tags['badges']||'',badgeInfoTag:tags['badge-info']||'',replyParentId,replyParentUser,replyParentText,
     color:tags['color']||rndColor(nick),ts:parseInt(tags['tmi-sent-ts'])||Date.now()});
 }
+function parseTwitchUserNotice(line){
+  const tags=parseTags(line);
+  if(tags['msg-id']!=='announcement') return;
+  const match=line.match(/USERNOTICE #\S+ :(.+)$/);
+  if(!match) return;
+  const id=tags['id']||('tw-an-'+Date.now()+Math.random().toString(36).slice(2));
+  const COLOR_MAP={primary:'#9146ff',blue:'#1e90ff',green:'#00c853',orange:'#ff6d00',purple:'#aa00ff'};
+  const announceColor=COLOR_MAP[(tags['msg-param-color']||'primary').toLowerCase()]||'#9146ff';
+  addMsg({id,platform:'twitch',author:tags['display-name']||'',text:match[1],
+    emotesTag:tags['emotes']||'',authorId:tags['user-id']||null,
+    badgesTag:tags['badges']||'',badgeInfoTag:tags['badge-info']||'',
+    color:tags['color']||announceColor,ts:parseInt(tags['tmi-sent-ts'])||Date.now(),
+    isAnnouncement:true,announcementColor:announceColor});
+}
+
 function parseClearMsg(line){const id=parseTags(line)['target-msg-id'];if(id)syncDelete(id);}
 function parseClearChat(line){
   const tags=parseTags(line);
@@ -1383,7 +1502,9 @@ function renderMessages(){
 function buildMsg(msg){
   const div=document.createElement('div');
   const isPing=pingMessageIds.has(msg.id);
-  div.className='msg '+(msg.platform==='twitch'?'tw':'yt')+(isPing?' msg-ping':'');
+  const isAnnounce=!!msg.isAnnouncement;
+  div.className='msg '+(msg.platform==='twitch'?'tw':'yt')+(isPing?' msg-ping':'')+(isAnnounce?' msg-announcement':'');
+  if(isAnnounce && msg.announcementColor) div.style.borderLeftColor=msg.announcementColor;
   div.dataset.id=msg.id;
   const t=new Date(msg.ts);
   const time=t.getHours().toString().padStart(2,'0')+':'+t.getMinutes().toString().padStart(2,'0');
@@ -1392,9 +1513,10 @@ function buildMsg(msg){
   const renderedText=renderMsgText(msg.text,msg.emotesTag||'');
   const badgesHtml = buildBadgeImgs(msg);
   const replyBar = msg.replyParentId ? `<div class="msg-reply-bar" data-scrollto="${esc(msg.replyParentId)}"><span class="msg-reply-author">@${esc(msg.replyParentUser||'?')}</span><span class="msg-reply-text">${esc((msg.replyParentText||'').replace(/\\\\s/g,' ').slice(0,80))}</span></div>` : '';
+  const announceTag = isAnnounce ? `<span class="announce-tag" style="background:${msg.announcementColor}22;color:${msg.announcementColor};border:1px solid ${msg.announcementColor}44">📣</span>` : '';
   div.innerHTML=
     `<span class="msg-time">${time}</span>`+
-    `<div class="msg-body">${replyBar}${badgesHtml}<span class="msg-author" style="color:${msg.color}" data-msgid="${esc(msg.id)}">${esc(msg.author)}</span><span class="msg-sep">:</span><span class="msg-text">${renderedText}</span></div>`;
+    `<div class="msg-body">${replyBar}${announceTag}${badgesHtml}<span class="msg-author" style="color:${msg.color}" data-msgid="${esc(msg.id)}">${esc(msg.author)}</span><span class="msg-sep">:</span><span class="msg-text">${renderedText}</span></div>`;
   return div;
 }
 
@@ -1534,7 +1656,9 @@ function closeModal(){
   el('modalOverlay').classList.remove('open');
   modalAction=null;
   const btn=el('modalConfirmBtn');
-  if(btn){btn.disabled=false;}
+  if(btn){btn.disabled=false;btn.style.display='';}
+  const cancel=document.querySelector('.modal-cancel');
+  if(cancel) cancel.textContent='Cancel';
 }
 
 async function modalConfirm(){
@@ -1544,6 +1668,73 @@ async function modalConfirm(){
   btn.disabled=true; btn.textContent='…';
 
   try{
+    if(modalAction.type==='poll'){
+      const r=await createPoll();
+      if(!r){btn.disabled=false;btn.textContent='Create Poll';return;}
+      flashSuccess('Poll started'+(r?.data?.[0]?.title?': '+r.data[0].title:''));
+      closeModal();return;
+    }
+    if(modalAction.type==='prediction'){
+      const r=await createPrediction();
+      if(!r){btn.disabled=false;btn.textContent='Create Prediction';return;}
+      flashSuccess('Prediction started'+(r?.data?.[0]?.title?': '+r.data[0].title:''));
+      closeModal();return;
+    }
+    if(modalAction.type==='raid'){
+      const login=el('raidChannel')?.value?.trim().toLowerCase().replace(/^@/,'');
+      if(!login){flashErr('Enter a channel name.');btn.disabled=false;btn.textContent='Start Raid';return;}
+      const res=await twFetch(`https://api.twitch.tv/helix/users?login=${encodeURIComponent(login)}`);
+      const toId=res?.data?.[0]?.id;
+      if(!toId){flashErr('Channel not found: '+login);btn.disabled=false;btn.textContent='Start Raid';return;}
+      await twFetch(`https://api.twitch.tv/helix/raids`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({from_broadcaster_id:twBroadcasterId,to_broadcaster_id:toId})});
+      flashSuccess('Raid started → '+login);
+      closeModal();return;
+    }
+    if(modalAction.type==='stream-info'){
+      const title=el('streamTitle')?.value?.trim();
+      const gameName=el('streamGame')?.value?.trim();
+      let gameId=_selectedGameId;
+      if(gameName&&!gameId){
+        try{const r=await twFetch(`https://api.twitch.tv/helix/search/categories?query=${encodeURIComponent(gameName)}&first=1`);gameId=r?.data?.[0]?.id||null;}catch{}
+      }
+      const body={};
+      if(title) body.title=title;
+      if(gameId) body.game_id=gameId;
+      else if(gameName==='') body.game_id='';
+      await bcFetch(`https://api.twitch.tv/helix/channels`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({broadcaster_id:twBroadcasterId,...body})});
+      flashSuccess('Stream info updated');
+      closeModal();return;
+    }
+    if(modalAction.type==='announcement'){
+      const message=el('announcementText')?.value?.trim();
+      if(!message){flashErr('Enter a message.');btn.disabled=false;btn.textContent='Send Announcement';return;}
+      await twFetch(`https://api.twitch.tv/helix/chat/announcements?broadcaster_id=${twBroadcasterId}&moderator_id=${twUserId}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message,color:_announceColor||'primary'})});
+      flashSuccess('Announcement sent');
+      closeModal();return;
+    }
+    if(modalAction.type==='shoutout'){
+      const login=el('shoutoutUser')?.value?.trim().toLowerCase().replace(/^@/,'');
+      if(!login){flashErr('Enter a username.');btn.disabled=false;btn.textContent='Send Shoutout';return;}
+      const res=await twFetch(`https://api.twitch.tv/helix/users?login=${encodeURIComponent(login)}`);
+      const toId=res?.data?.[0]?.id;
+      if(!toId){flashErr('User not found: '+login);btn.disabled=false;btn.textContent='Send Shoutout';return;}
+      await twFetch(`https://api.twitch.tv/helix/chat/shoutouts?from_broadcaster_id=${twBroadcasterId}&to_broadcaster_id=${toId}&moderator_id=${twUserId}`,{method:'POST'});
+      flashSuccess('Shoutout sent to '+login);
+      closeModal();return;
+    }
+    if(modalAction.type==='chat-modes'){
+      const settings={
+        emote_mode:el('cmEmote')?.classList.contains('on')??_cmSettings.emote_mode??false,
+        subscriber_mode:el('cmSub')?.classList.contains('on')??_cmSettings.subscriber_mode??false,
+        slow_mode:el('cmSlow')?.classList.contains('on')??_cmSettings.slow_mode??false,
+        slow_mode_wait_time:parseInt(el('cmSlowTime')?.value||'30')||30,
+        follower_mode:el('cmFollower')?.classList.contains('on')??_cmSettings.follower_mode??false,
+        follower_mode_duration:parseInt(el('cmFollowerTime')?.value||'0')||0,
+      };
+      await twFetch(`https://api.twitch.tv/helix/chat/settings?broadcaster_id=${twBroadcasterId}&moderator_id=${twUserId}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(settings)});
+      flashSuccess('Chat modes updated');
+      closeModal();return;
+    }
     if(modalAction.type==='yt-timeout'){
       const raw=el('toInput')?.value||'';
       const dur=Math.max(1,Math.min(86400,parseDuration(raw)||window._toSnaps[window._toSnapIdx||4]||300));
@@ -1592,7 +1783,8 @@ async function modalConfirm(){
   }catch(e){
     flashErr('Action failed: '+e.message);
     btn.disabled=false;
-    btn.textContent=modalAction.type==='warn'?'Send Warning':modalAction.type==='timeout'?'Timeout':'Ban User';
+    const _btnLabels={poll:'Create Poll',prediction:'Create Prediction',warn:'Send Warning',timeout:'Timeout',ban:'Ban User','yt-ban':'Ban User','yt-timeout':'Timeout',raid:'Start Raid','stream-info':'Update Info',announcement:'Send Announcement',shoutout:'Send Shoutout','chat-modes':'Save','manage-poll':'Update Poll','manage-prediction':'Update Prediction'};
+    btn.textContent=_btnLabels[modalAction.type]||'Confirm';
   }
 }
 
@@ -1902,6 +2094,454 @@ function scrollToMsg(id){
   setTimeout(()=>node.classList.remove('reply-highlight'), 1000);
 }
 
+// ═══════ COMMANDS ═══════
+function toggleCmdDropdown(){
+  const dd=el('cmdDropdown'),btn=el('cmdBtn');
+  if(dd.classList.contains('open')){dd.classList.remove('open');btn.classList.remove('active');}
+  else{dd.classList.add('open');btn.classList.add('active');closeEmotePicker();}
+}
+function closeCmdDropdown(){el('cmdDropdown').classList.remove('open');el('cmdBtn').classList.remove('active');}
+
+// Close when clicking outside
+document.addEventListener('click',e=>{if(!el('chatInputWrap').contains(e.target))closeCmdDropdown();});
+
+// ── Slash commands ─────────────────────────────────────────
+const SLASH_COMMANDS=[
+  {cmd:'/poll',       label:'Create Poll',        desc:'Start a viewer poll'},
+  {cmd:'/managepoll', label:'Manage Poll',         desc:'End or archive active poll'},
+  {cmd:'/prediction', label:'Create Prediction',   desc:'Start a channel points prediction'},
+  {cmd:'/managepred', label:'Manage Prediction',   desc:'Resolve or cancel active prediction'},
+  {cmd:'/streaminfo', label:'Edit Stream Info',    desc:'Change title and game'},
+  {cmd:'/raid',       label:'Start Raid',          desc:'Send viewers to another channel'},
+  {cmd:'/announce',   label:'Announcement',        desc:'Send highlighted chat message'},
+  {cmd:'/shoutout',   label:'Shoutout',            desc:'Official Twitch shoutout'},
+  {cmd:'/chatmodes',  label:'Chat Modes',          desc:'Toggle slow mode, sub-only, etc.'},
+];
+
+function showCommandAc(query){
+  const ac=el('acDropdown');
+  const q=query.slice(1).toLowerCase();
+  const matches=SLASH_COMMANDS.filter(c=>c.cmd.slice(1).startsWith(q)||c.label.toLowerCase().includes(q));
+  if(!matches.length){closeAc();return;}
+  acSelectedIndex=-1;
+  ac.innerHTML='';
+  matches.forEach((cmd,i)=>{
+    const div=document.createElement('div');
+    div.className='ac-item';
+    div.dataset.idx=i;
+    div.innerHTML=`<span class="ac-name">${esc(cmd.cmd)}</span><span class="ac-src">${esc(cmd.desc)}</span>`;
+    div.onmousedown=(ev)=>{ev.preventDefault();commitCommandAc(cmd);};
+    ac.appendChild(div);
+  });
+  ac.classList.add('open');
+  closeEmotePicker();
+}
+
+function commitCommandAc(cmd){
+  el('chatInput').value='';
+  closeAc();
+  const actions={
+    '/poll':openPollModal,'/managepoll':openManagePollModal,
+    '/prediction':openPredictionModal,'/managepred':openManagePredictionModal,
+    '/streaminfo':openStreamInfoModal,'/raid':openRaidModal,'/announce':openAnnouncementModal,
+    '/shoutout':()=>openShoutoutModal(),'/chatmodes':openChatModesModal,
+  };
+  actions[cmd.cmd]?.();
+}
+
+// ── Duration snap helpers (reused by polls & predictions) ──
+const POLL_DUR_SNAPS=[15,30,60,120,300,600,900,1800];
+const POLL_DUR_LABELS=['15s','30s','1m','2m','5m','10m','15m','30m'];
+const PRED_DUR_SNAPS=[30,60,120,300,600,900,1800];
+const PRED_DUR_LABELS=['30s','1m','2m','5m','10m','15m','30m'];
+
+// ── Polls ──────────────────────────────────────────────────
+function openPollModal(){
+  closeCmdDropdown();
+  if(!twToken){flashErr('Log in with Twitch first.');return;}
+  modalAction={type:'poll'};
+  el('modalTitle').textContent='Create Poll';
+  el('modalSub').textContent='Viewers vote on a question in chat.';
+  el('modalBody').innerHTML=`
+    <div style="margin-bottom:10px"><label>Question</label>
+      <input type="text" id="pollTitle" placeholder="What should we do next?" maxlength="60" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:8px 11px;color:var(--text);font-family:var(--mono);font-size:13px;outline:none;transition:border-color .15s" oninput="this.style.borderColor=this.value.trim()?'var(--twitch)':''">
+    </div>
+    <div style="margin-bottom:10px">
+      <label>Choices <span id="pollChoiceCount" style="color:var(--muted);font-weight:400">(2/5)</span></label>
+      <div id="pollChoiceList">
+        <div class="poll-choice-row"><input placeholder="Choice 1" maxlength="25" oninput="syncPollChoices()"><button class="poll-choice-rm" onclick="removePollChoice(this)" style="visibility:hidden">✕</button></div>
+        <div class="poll-choice-row"><input placeholder="Choice 2" maxlength="25" oninput="syncPollChoices()"><button class="poll-choice-rm" onclick="removePollChoice(this)" style="visibility:hidden">✕</button></div>
+      </div>
+      <button class="add-choice-btn" id="addChoiceBtn" onclick="addPollChoice()">+ Add choice</button>
+    </div>
+    <div><label>Duration</label>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <input type="range" id="toSlider" min="0" max="${POLL_DUR_SNAPS.length-1}" value="2" step="1" style="flex:1;accent-color:var(--twitch)" oninput="onToSlider()">
+        <input type="text" class="to-input" id="toInput" value="1m" oninput="onToInput()" placeholder="e.g. 5m">
+      </div>
+      <div class="to-snaps">${POLL_DUR_SNAPS.map((s,i)=>`<button class="to-snap${i===2?' active':''}" onclick="setToSnap(${i})">${POLL_DUR_LABELS[i]}</button>`).join('')}</div>
+    </div>`;
+  el('modalConfirmBtn').className='modal-confirm warn';
+  el('modalConfirmBtn').textContent='Create Poll';
+  el('modalOverlay').classList.add('open');
+  window._toSnaps=POLL_DUR_SNAPS; window._toSnapIdx=2;
+  setTimeout(()=>el('pollTitle')?.focus(),50);
+}
+
+function syncPollChoices(){
+  const rows=el('pollChoiceList').querySelectorAll('.poll-choice-row');
+  const n=rows.length;
+  el('pollChoiceCount').textContent=`(${n}/5)`;
+  rows.forEach(row=>{const rm=row.querySelector('.poll-choice-rm');if(rm)rm.style.visibility=n>2?'visible':'hidden';});
+  el('addChoiceBtn').style.display=n>=5?'none':'';
+}
+
+function addPollChoice(){
+  const list=el('pollChoiceList');
+  const n=list.querySelectorAll('.poll-choice-row').length;
+  if(n>=5)return;
+  const row=document.createElement('div');
+  row.className='poll-choice-row';
+  row.innerHTML=`<input placeholder="Choice ${n+1}" maxlength="25" oninput="syncPollChoices()"><button class="poll-choice-rm" onclick="removePollChoice(this)">✕</button>`;
+  list.appendChild(row);
+  row.querySelector('input').focus();
+  syncPollChoices();
+}
+
+function removePollChoice(btn){
+  const list=el('pollChoiceList');
+  if(list.querySelectorAll('.poll-choice-row').length<=2)return;
+  btn.closest('.poll-choice-row').remove();
+  list.querySelectorAll('.poll-choice-row input').forEach((inp,i)=>{if(!inp.value)inp.placeholder=`Choice ${i+1}`;});
+  syncPollChoices();
+}
+
+async function openManagePollModal(){
+  closeCmdDropdown();
+  if(!twBcToken){flashErr('Add a broadcaster token in Settings to manage polls.');return;}
+  modalAction={type:'manage-poll'};
+  el('modalTitle').textContent='Manage Poll';
+  el('modalSub').textContent='Loading…';
+  el('modalBody').innerHTML='<div class="pp-loading">Fetching active poll…</div>';
+  el('modalConfirmBtn').style.display='none';
+  document.querySelector('.modal-cancel').textContent='Close';
+  el('modalOverlay').classList.add('open');
+  try{
+    const r=await bcFetch(`https://api.twitch.tv/helix/polls?broadcaster_id=${twBroadcasterId}&status=ACTIVE&first=1`);
+    const poll=r?.data?.[0];
+    if(!poll){el('modalSub').textContent='No active poll.';el('modalBody').innerHTML='<div class="pp-loading">No poll is currently running.</div>';return;}
+    const totalVotes=poll.choices.reduce((a,c)=>a+c.votes,0);
+    el('modalSub').textContent=esc(poll.title);
+    el('modalBody').innerHTML=`
+      <div style="margin-bottom:12px">${poll.choices.map(c=>`
+        <div style="margin-bottom:6px">
+          <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:2px"><span>${esc(c.title)}</span><span style="color:var(--muted)">${c.votes} votes</span></div>
+          <div style="background:var(--surface2);border-radius:3px;height:4px"><div style="background:var(--twitch);border-radius:3px;height:4px;width:${totalVotes?Math.round(c.votes/totalVotes*100):0}%"></div></div>
+        </div>`).join('')}
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="modal-confirm to" style="flex:1" onclick="doEndPoll('${esc(poll.id)}','TERMINATED')">End Now</button>
+        <button class="modal-confirm" style="flex:1;background:var(--surface3);border:1px solid var(--border);color:var(--muted)" onclick="doEndPoll('${esc(poll.id)}','ARCHIVED')">Archive</button>
+      </div>`;
+  }catch(e){el('modalSub').textContent='Failed to load poll.';el('modalBody').innerHTML=`<div class="pp-loading">${esc(e.message)}</div>`;}
+}
+
+async function doEndPoll(pollId,status){
+  try{
+    await bcFetch(`https://api.twitch.tv/helix/polls`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({broadcaster_id:twBroadcasterId,id:pollId,status})});
+    flashSuccess(status==='TERMINATED'?'Poll ended':'Poll archived');
+    closeModal();
+  }catch(e){flashErr('Failed to end poll: '+e.message);}
+}
+
+async function createPoll(){
+  const title=el('pollTitle')?.value?.trim();
+  if(!title){flashErr('Enter a poll question.');return false;}
+  const choices=[...el('pollChoiceList').querySelectorAll('input')].map(i=>i.value.trim()).filter(Boolean);
+  if(choices.length<2){flashErr('Enter at least 2 choices.');return false;}
+  const duration=window._toSnaps[window._toSnapIdx??2]||60;
+  return bcFetch(`https://api.twitch.tv/helix/polls`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({broadcaster_id:twBroadcasterId,title,choices:choices.map(c=>({title:c})),duration})});
+}
+
+// ── Predictions ────────────────────────────────────────────
+function openPredictionModal(){
+  closeCmdDropdown();
+  if(!twToken){flashErr('Log in with Twitch first.');return;}
+  modalAction={type:'prediction'};
+  el('modalTitle').textContent='Create Prediction';
+  el('modalSub').textContent='Viewers use channel points to predict an outcome.';
+  el('modalBody').innerHTML=`
+    <div style="margin-bottom:10px"><label>Question</label>
+      <input type="text" id="predTitle" placeholder="Will we win this match?" maxlength="45" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:8px 11px;color:var(--text);font-family:var(--mono);font-size:13px;outline:none;transition:border-color .15s" oninput="this.style.borderColor=this.value.trim()?'var(--twitch)':''">
+    </div>
+    <div style="margin-bottom:10px">
+      <label>Outcomes</label>
+      <div class="poll-choice-row" style="margin-bottom:6px"><input id="predOut1" placeholder="Yes (Blue)" maxlength="25"></div>
+      <div class="poll-choice-row"><input id="predOut2" placeholder="No (Pink)" maxlength="25"></div>
+    </div>
+    <div><label>Prediction Window</label>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <input type="range" id="toSlider" min="0" max="${PRED_DUR_SNAPS.length-1}" value="3" step="1" style="flex:1;accent-color:var(--twitch)" oninput="onToSlider()">
+        <input type="text" class="to-input" id="toInput" value="5m" oninput="onToInput()" placeholder="e.g. 5m">
+      </div>
+      <div class="to-snaps">${PRED_DUR_SNAPS.map((s,i)=>`<button class="to-snap${i===3?' active':''}" onclick="setToSnap(${i})">${PRED_DUR_LABELS[i]}</button>`).join('')}</div>
+    </div>`;
+  el('modalConfirmBtn').className='modal-confirm warn';
+  el('modalConfirmBtn').textContent='Create Prediction';
+  el('modalOverlay').classList.add('open');
+  window._toSnaps=PRED_DUR_SNAPS; window._toSnapIdx=3;
+  setTimeout(()=>el('predTitle')?.focus(),50);
+}
+
+async function openManagePredictionModal(){
+  closeCmdDropdown();
+  if(!twBcToken){flashErr('Add a broadcaster token in Settings to manage predictions.');return;}
+  modalAction={type:'manage-prediction'};
+  el('modalTitle').textContent='Manage Prediction';
+  el('modalSub').textContent='Loading…';
+  el('modalBody').innerHTML='<div class="pp-loading">Fetching active prediction…</div>';
+  el('modalConfirmBtn').style.display='none';
+  document.querySelector('.modal-cancel').textContent='Close';
+  el('modalOverlay').classList.add('open');
+  try{
+    const r=await bcFetch(`https://api.twitch.tv/helix/predictions?broadcaster_id=${twBroadcasterId}&status=ACTIVE&first=1`);
+    const pred=r?.data?.[0];
+    if(!pred){
+      // Check LOCKED too
+      const r2=await bcFetch(`https://api.twitch.tv/helix/predictions?broadcaster_id=${twBroadcasterId}&status=LOCKED&first=1`);
+      const pred2=r2?.data?.[0];
+      if(!pred2){el('modalSub').textContent='No active prediction.';el('modalBody').innerHTML='<div class="pp-loading">No prediction is currently running.</div>';return;}
+      renderManagePrediction(pred2);return;
+    }
+    renderManagePrediction(pred);
+  }catch(e){el('modalSub').textContent='Failed to load prediction.';el('modalBody').innerHTML=`<div class="pp-loading">${esc(e.message)}</div>`;}
+}
+
+function renderManagePrediction(pred){
+  el('modalSub').textContent=esc(pred.title);
+  const total=pred.outcomes.reduce((a,o)=>a+(o.channel_points||0),0);
+  el('modalBody').innerHTML=`
+    <p style="font-size:11px;color:var(--muted);margin-bottom:10px">Click an outcome to declare it the winner:</p>
+    ${pred.outcomes.map(o=>`
+      <div class="manage-outcome" onclick="doResolvePrediction('${esc(pred.id)}','${esc(o.id)}','${esc(o.title)}')">
+        <div class="oc-title">${esc(o.title)}</div>
+        <div class="oc-stats">${o.channel_points?.toLocaleString()||0} pts · ${o.top_predictors?.length||0} predictors${total?' · '+(total?Math.round((o.channel_points||0)/total*100):0)+'%':''}</div>
+      </div>`).join('')}
+    <button class="modal-confirm" style="width:100%;background:rgba(255,68,68,.15);border:1px solid rgba(255,68,68,.3);color:var(--del);margin-top:4px" onclick="doCancelPrediction('${esc(pred.id)}')">Cancel &amp; Refund</button>`;
+}
+
+async function doResolvePrediction(predId,outcomeId,outcomeTitle){
+  try{
+    await bcFetch(`https://api.twitch.tv/helix/predictions`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({broadcaster_id:twBroadcasterId,id:predId,status:'RESOLVED',winning_outcome_id:outcomeId})});
+    flashSuccess('Prediction resolved: '+outcomeTitle+' wins');
+    closeModal();
+  }catch(e){flashErr('Failed to resolve prediction: '+e.message);}
+}
+
+async function doCancelPrediction(predId){
+  try{
+    await bcFetch(`https://api.twitch.tv/helix/predictions`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({broadcaster_id:twBroadcasterId,id:predId,status:'CANCELED'})});
+    flashSuccess('Prediction cancelled and points refunded');
+    closeModal();
+  }catch(e){flashErr('Failed to cancel prediction: '+e.message);}
+}
+
+async function createPrediction(){
+  const title=el('predTitle')?.value?.trim();
+  if(!title){flashErr('Enter a prediction question.');return false;}
+  const out1=el('predOut1')?.value?.trim()||'Yes';
+  const out2=el('predOut2')?.value?.trim()||'No';
+  const window_secs=window._toSnaps[window._toSnapIdx??3]||300;
+  return bcFetch(`https://api.twitch.tv/helix/predictions`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({broadcaster_id:twBroadcasterId,title,outcomes:[{title:out1},{title:out2}],prediction_window:window_secs})});
+}
+
+// ── Raid ────────────────────────────────────────────────────
+function openRaidModal(){
+  closeCmdDropdown();
+  if(!twToken){flashErr('Log in with Twitch first.');return;}
+  if(!twBroadcasterId){flashErr('Twitch IDs not ready — try again.');return;}
+  modalAction={type:'raid'};
+  el('modalTitle').textContent='Start Raid';
+  el('modalSub').textContent='Send your viewers to another channel.';
+  el('modalBody').innerHTML=`
+    <div><label>Target Channel</label>
+      <input type="text" id="raidChannel" placeholder="channel name" maxlength="50" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:8px 11px;color:var(--text);font-family:var(--mono);font-size:13px;outline:none;transition:border-color .15s" oninput="this.style.borderColor=this.value.trim()?'var(--twitch)':''">
+    </div>`;
+  el('modalConfirmBtn').className='modal-confirm warn';
+  el('modalConfirmBtn').textContent='Start Raid';
+  el('modalOverlay').classList.add('open');
+  setTimeout(()=>el('raidChannel')?.focus(),50);
+}
+
+// ── Stream Info ────────────────────────────────────────────
+let _selectedGameId=null;
+let _gameSearchTimer=null;
+
+async function openStreamInfoModal(){
+  closeCmdDropdown();
+  if(!twBcToken){flashErr('Add a broadcaster token in Settings to edit stream info.');return;}
+  modalAction={type:'stream-info'};
+  el('modalTitle').textContent='Edit Stream Info';
+  el('modalSub').textContent='Loading current info…';
+  el('modalBody').innerHTML='<div class="pp-loading">Fetching…</div>';
+  el('modalConfirmBtn').className='modal-confirm warn';
+  el('modalConfirmBtn').textContent='Save';
+  el('modalOverlay').classList.add('open');
+  _selectedGameId=null;
+  try{
+    const r=await twFetch(`https://api.twitch.tv/helix/channels?broadcaster_id=${twBroadcasterId}`);
+    const ch=r?.data?.[0];
+    el('modalSub').textContent='Update title and game.';
+    el('modalBody').innerHTML=`
+      <div style="margin-bottom:10px"><label>Title</label>
+        <input type="text" id="streamTitle" value="${esc(ch?.title||'')}" maxlength="140" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:8px 11px;color:var(--text);font-family:var(--mono);font-size:13px;outline:none;transition:border-color .15s">
+      </div>
+      <div><label>Game / Category</label>
+        <div class="game-wrap">
+          <input type="text" id="streamGame" value="${esc(ch?.game_name||'')}" placeholder="Search games…" autocomplete="off"
+            style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:8px 11px;color:var(--text);font-family:var(--mono);font-size:13px;outline:none;transition:border-color .15s"
+            oninput="onGameSearch(this.value)">
+          <div class="game-results" id="gameResults"></div>
+        </div>
+      </div>`;
+    _selectedGameId=ch?.game_id||null;
+  }catch(e){el('modalSub').textContent='Failed to load.';el('modalBody').innerHTML=`<div class="pp-loading">${esc(e.message)}</div>`;}
+}
+
+function onGameSearch(q){
+  clearTimeout(_gameSearchTimer);
+  _selectedGameId=null;
+  const res=el('gameResults'); if(!res)return;
+  if(!q.trim()){res.classList.remove('open');return;}
+  _gameSearchTimer=setTimeout(async()=>{
+    try{
+      const r=await twFetch(`https://api.twitch.tv/helix/search/categories?query=${encodeURIComponent(q)}&first=8`);
+      const games=r?.data||[];
+      if(!games.length){res.classList.remove('open');return;}
+      res.innerHTML=games.map(g=>`<div class="game-result" onclick="selectGame('${esc(g.id)}','${esc(g.name)}')"><img src="${safeUrl(g.box_art_url?.replace('{width}','20').replace('{height}','27')||'')}" alt=""><span>${esc(g.name)}</span></div>`).join('');
+      res.classList.add('open');
+    }catch{}
+  },300);
+}
+
+function selectGame(id,name){
+  _selectedGameId=id;
+  const inp=el('streamGame'); if(inp){inp.value=name;inp.style.borderColor='var(--twitch)';}
+  el('gameResults').classList.remove('open');
+}
+
+// ── Announcement ───────────────────────────────────────────
+const ANNOUNCE_COLORS=[
+  {id:'primary',hex:'#9146ff',label:'Default'},
+  {id:'blue',hex:'#1e90ff',label:'Blue'},
+  {id:'green',hex:'#00c853',label:'Green'},
+  {id:'orange',hex:'#ff6d00',label:'Orange'},
+  {id:'purple',hex:'#aa00ff',label:'Purple'},
+];
+let _announceColor='primary';
+
+function openAnnouncementModal(){
+  closeCmdDropdown();
+  if(!twToken){flashErr('Log in with Twitch first.');return;}
+  if(!twUserId||!twBroadcasterId){flashErr('Twitch IDs not ready — try again.');return;}
+  _announceColor='primary';
+  modalAction={type:'announcement'};
+  el('modalTitle').textContent='Send Announcement';
+  el('modalSub').textContent='Highlighted message visible to all viewers.';
+  el('modalBody').innerHTML=`
+    <div style="margin-bottom:10px"><label>Message</label>
+      <textarea id="announcementText" maxlength="500" placeholder="Your announcement…" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:8px 11px;color:var(--text);font-family:var(--mono);font-size:13px;outline:none;resize:none;height:72px;transition:border-color .15s"></textarea>
+    </div>
+    <div><label>Color</label>
+      <div class="color-opts">
+        ${ANNOUNCE_COLORS.map(c=>`<div class="color-opt${c.id==='primary'?' sel':''}" style="background:${c.hex}" title="${c.label}" onclick="selectAnnounceColor('${c.id}',this)"></div>`).join('')}
+      </div>
+    </div>`;
+  el('modalConfirmBtn').className='modal-confirm warn';
+  el('modalConfirmBtn').textContent='Send Announcement';
+  el('modalOverlay').classList.add('open');
+  setTimeout(()=>el('announcementText')?.focus(),50);
+}
+
+function selectAnnounceColor(id,el_){
+  _announceColor=id;
+  document.querySelectorAll('.color-opt').forEach(e=>e.classList.remove('sel'));
+  el_.classList.add('sel');
+}
+
+// ── Shoutout ───────────────────────────────────────────────
+function openShoutoutModal(prefill=''){
+  closeCmdDropdown();
+  if(!twToken){flashErr('Log in with Twitch first.');return;}
+  if(!twUserId||!twBroadcasterId){flashErr('Twitch IDs not ready — try again.');return;}
+  modalAction={type:'shoutout'};
+  el('modalTitle').textContent='Shoutout';
+  el('modalSub').textContent='Give an official Twitch shoutout to a user.';
+  el('modalBody').innerHTML=`
+    <div><label>Username</label>
+      <input type="text" id="shoutoutUser" value="${esc(prefill.replace(/^@/,''))}" placeholder="channel_name" maxlength="50"
+        style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:8px 11px;color:var(--text);font-family:var(--mono);font-size:13px;outline:none;transition:border-color .15s" oninput="this.style.borderColor=this.value.trim()?'var(--twitch)':''">
+    </div>`;
+  el('modalConfirmBtn').className='modal-confirm warn';
+  el('modalConfirmBtn').textContent='Send Shoutout';
+  el('modalOverlay').classList.add('open');
+  if(!prefill) setTimeout(()=>el('shoutoutUser')?.focus(),50);
+}
+
+// ── Chat Modes ─────────────────────────────────────────────
+let _cmSettings={};
+
+async function openChatModesModal(){
+  closeCmdDropdown();
+  if(!twToken){flashErr('Log in with Twitch first.');return;}
+  if(!twUserId||!twBroadcasterId){flashErr('Twitch IDs not ready — try again.');return;}
+  modalAction={type:'chat-modes'};
+  el('modalTitle').textContent='Chat Modes';
+  el('modalSub').textContent='Loading current settings…';
+  el('modalBody').innerHTML='<div class="pp-loading">Fetching…</div>';
+  el('modalConfirmBtn').className='modal-confirm warn';
+  el('modalConfirmBtn').textContent='Save';
+  el('modalOverlay').classList.add('open');
+  try{
+    const r=await twFetch(`https://api.twitch.tv/helix/chat/settings?broadcaster_id=${twBroadcasterId}&moderator_id=${twUserId}`);
+    const s=r?.data?.[0]||{};
+    _cmSettings={...s};
+    el('modalSub').textContent='Toggle chat restrictions.';
+    el('modalBody').innerHTML=`
+      <div class="chat-mode-row">
+        <div><div class="chat-mode-label">Emote-only</div><div class="chat-mode-sub">Only emotes allowed</div></div>
+        <div class="chat-mode-right"><div class="cm-toggle${s.emote_mode?' on':''}" id="cmEmote" onclick="toggleCm('cmEmote','emote_mode')"></div></div>
+      </div>
+      <div class="chat-mode-row">
+        <div><div class="chat-mode-label">Subscriber-only</div><div class="chat-mode-sub">Subs and mods only</div></div>
+        <div class="chat-mode-right"><div class="cm-toggle${s.subscriber_mode?' on':''}" id="cmSub" onclick="toggleCm('cmSub','subscriber_mode')"></div></div>
+      </div>
+      <div class="chat-mode-row">
+        <div><div class="chat-mode-label">Slow mode</div><div class="chat-mode-sub">Seconds between messages</div></div>
+        <div class="chat-mode-right">
+          <input class="cm-input" id="cmSlowTime" type="number" min="3" max="120" value="${s.slow_mode_wait_time||30}" style="display:${s.slow_mode?'':'none'}">
+          <div class="cm-toggle${s.slow_mode?' on':''}" id="cmSlow" onclick="toggleCm('cmSlow','slow_mode')"></div>
+        </div>
+      </div>
+      <div class="chat-mode-row">
+        <div><div class="chat-mode-label">Follower-only</div><div class="chat-mode-sub">Minutes followed (0 = any)</div></div>
+        <div class="chat-mode-right">
+          <input class="cm-input" id="cmFollowerTime" type="number" min="0" max="129600" value="${s.follower_mode_duration||0}" style="display:${s.follower_mode?'':'none'}">
+          <div class="cm-toggle${s.follower_mode?' on':''}" id="cmFollower" onclick="toggleCm('cmFollower','follower_mode')"></div>
+        </div>
+      </div>`;
+  }catch(e){el('modalSub').textContent='Failed to load settings.';el('modalBody').innerHTML=`<div class="pp-loading">${esc(e.message)}</div>`;}
+}
+
+function toggleCm(toggleId, settingKey){
+  const tog=el(toggleId); if(!tog)return;
+  const on=tog.classList.toggle('on');
+  _cmSettings[settingKey]=on;
+  // Show/hide duration inputs
+  if(settingKey==='slow_mode') { const i=el('cmSlowTime'); if(i) i.style.display=on?'':'none'; }
+  if(settingKey==='follower_mode') { const i=el('cmFollowerTime'); if(i) i.style.display=on?'':'none'; }
+}
+
 // ═══════ CONTEXT MENU ═══════
 let ctxTarget = null;
 
@@ -2110,7 +2750,7 @@ function resetSession(){
   if(window.electronAPI) window.electronAPI.closeYoutubeChat();
   sessionStorage.clear();
   messages=[]; deletedIds=new Set(); ownMessageIds=new Set();
-  twToken=null; twUserId=null; twBroadcasterId=null; twDisplayName=null;
+  twToken=null; twUserId=null; twBroadcasterId=null; twDisplayName=null; twBcToken=null;
   ytToken=null; ytDisplayName=null; ytChatId=null; ytNextPage=null;
   pingMessageIds=new Set(); twUserList.clear(); ytUserList.clear();
   el('tw-username').className='auth-username'; el('tw-username').textContent='';
