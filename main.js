@@ -214,6 +214,10 @@ async function injectChatObserver(page) {
       observer.observe(container, { childList: true, subtree: true });
     }
 
+    // Map from our internal message ID → DOM element, so the delete handler can find
+    // the exact element without relying on text matching or YouTube's ID attributes.
+    if (!window.__scMsgMap) window.__scMsgMap = new Map();
+
     function processMsg(el, seen) {
       // Try multiple ID sources — YouTube uses different attrs in different contexts
       const id = el.getAttribute('id') ||
@@ -223,6 +227,9 @@ async function injectChatObserver(page) {
                  (Math.random().toString(36).slice(2));
       if (seen.has(id)) return;
       seen.add(id);
+
+      // Store a direct reference to this element keyed by our ID
+      window.__scMsgMap.set(id, el);
 
       const authorEl = el.querySelector('#author-name');
       const msgEl = el.querySelector('#message');
@@ -401,11 +408,13 @@ ipcMain.handle('yt:open', async (_, input) => {
       return { ok: false, error: 'Please log in to Google in the YouTube window, then click Connect YouTube again.' };
     }
 
-    // Minimize the Chrome window now that we have access
+    // Move Chrome window off-screen (stays in normal/rendering state so Puppeteer interactions work)
     try {
       const client = await ytPage.target().createCDPSession();
       const { windowId } = await client.send('Browser.getWindowForTarget');
-      await client.send('Browser.setWindowBounds', { windowId, bounds: { windowState: 'minimized' } });
+      await client.send('Browser.setWindowBounds', { windowId, bounds: { windowState: 'normal' } });
+      await new Promise(r => setTimeout(r, 150));
+      await client.send('Browser.setWindowBounds', { windowId, bounds: { left: -9999, top: -9999, width: 900, height: 700 } });
     } catch {}
 
     // Wait for chat to load
@@ -482,107 +491,68 @@ ipcMain.handle('yt:debug', async () => {
 ipcMain.handle('yt:delete', async (_, { msgId, authorId, text }) => {
   if (!ytPage) return { ok: false, error: 'YouTube not connected' };
   try {
-    // Find the message element
-    const elFound = await ytPage.evaluate((id, txt) => {
-      let el = document.getElementById(id) ||
-               document.querySelector(`[id="${id}"], [data-id="${id}"]`);
-      // Fallback: match by text snippet
-      if (!el && txt) {
-        const msgs = [...document.querySelectorAll('yt-live-chat-text-message-renderer')];
-        el = msgs.find(m => (m.querySelector('#message')||m).textContent.trim().startsWith(txt.slice(0,20))) || null;
+    // Step 1: get an ElementHandle for the target message.
+    // ElementHandle.click() uses CDP (isTrusted=true) and handles scrollIntoView internally.
+    const msgHandle = await ytPage.evaluateHandle((id, txt, aId) => {
+      // Primary: look up the exact element we stored when the message was first observed
+      let msgEl = window.__scMsgMap?.get(id) || null;
+      // Validate it's still in the DOM (YouTube may have recycled it)
+      if (msgEl && !document.contains(msgEl)) msgEl = null;
+
+      // Fallback: YouTube attribute lookup
+      if (!msgEl) {
+        msgEl = document.getElementById(id) ||
+                document.querySelector(`[id="${id}"], [data-id="${id}"]`) ||
+                null;
       }
-      if (!el) return false;
-      // Store a temporary marker so we can find it after hover
-      el.setAttribute('data-yt-pending-delete', '1');
-      // Dispatch hover events to trigger YouTube rendering the overflow button
-      el.dispatchEvent(new MouseEvent('mouseover', { bubbles: true, cancelable: true }));
-      el.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true, cancelable: true }));
-      return true;
-    }, msgId, text || '');
 
-    if (!elFound) return { ok: false, error: 'Message not found in chat' };
+      // Last resort: text + author search (only when both ID paths fail)
+      if (!msgEl && txt) {
+        const prefix = txt.slice(0, 20);
+        const all = [...document.querySelectorAll('yt-live-chat-text-message-renderer')];
+        const candidates = aId
+          ? all.filter(m => (m.getAttribute('author-id') || m.getAttribute('data-author-id') || '') === aId)
+          : all;
+        const matches = candidates.filter(m => (m.querySelector('#message') || m).textContent.trim().startsWith(prefix));
+        msgEl = matches.findLast(m => !!m) || null;
+      }
+      return msgEl;
+    }, msgId, text || '', authorId || '');
 
-    // Wait for YouTube to render the overflow button after hover
-    await new Promise(r => setTimeout(r, 600));
+    const found = await msgHandle.evaluate(el => !!el);
+    if (!found) return { ok: false, error: 'Message not found in chat' };
 
-    // Now click the overflow button
-    const menuFound = await ytPage.evaluate(() => {
-      const el = document.querySelector('[data-yt-pending-delete="1"]');
-      if (!el) return false;
-      el.removeAttribute('data-yt-pending-delete');
-      // Re-dispatch hover in case it faded
-      el.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
-      el.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
-      const menu = el.querySelector('#overflow, yt-icon-button#overflow, button#overflow') ||
-                   document.querySelector('yt-live-chat-text-message-renderer:hover #overflow');
-      if (!menu) return 'no-overflow';
-      menu.click();
-      return true;
-    });
+    // Step 2: CDP click on the message body (isTrusted=true, scroll handled automatically)
+    await msgHandle.click();
+    await new Promise(r => setTimeout(r, 700));
 
-    if (!menuFound || menuFound === 'no-overflow') {
-      // Try using Puppeteer's native hover + click which is more reliable
-      try {
-        const box = await ytPage.evaluate((id, txt) => {
-          let el = document.getElementById(id) ||
-                   document.querySelector(`[id="${id}"]`);
-          if (!el && txt) {
-            const msgs = [...document.querySelectorAll('yt-live-chat-text-message-renderer')];
-            el = msgs.find(m => (m.querySelector('#message')||m).textContent.trim().startsWith(txt.slice(0,20))) || null;
-          }
-          if (!el) return null;
-          const r = el.getBoundingClientRect();
-          return { x: r.left + r.width/2, y: r.top + r.height/2 };
-        }, msgId, text || '');
-
-        if (box) {
-          await ytPage.mouse.move(box.x, box.y);
-          await new Promise(r => setTimeout(r, 500));
-          // Now look for and click the overflow button
-          const overflowBox = await ytPage.evaluate(() => {
-            const btn = document.querySelector(
-              'yt-live-chat-text-message-renderer:hover #overflow, ' +
-              'yt-live-chat-text-message-renderer #overflow'
-            );
-            if (!btn) return null;
-            const r = btn.getBoundingClientRect();
-            return { x: r.left + r.width/2, y: r.top + r.height/2 };
-          });
-          if (overflowBox) {
-            await ytPage.mouse.click(overflowBox.x, overflowBox.y);
-          } else {
-            return { ok: false, error: 'Could not find overflow menu button' };
-          }
+    // Step 3: find the Remove item's screen coordinates and do a second CDP click on it.
+    // This avoids all Polymer/API complexity — two real clicks, same as a user would do.
+    const removeCoords = await ytPage.evaluate(() => {
+      const containers = document.querySelectorAll(
+        'tp-yt-paper-listbox, ytd-menu-popup-renderer, yt-live-chat-item-context-menu-renderer, tp-yt-iron-dropdown[opened]'
+      );
+      for (const c of containers) {
+        const items = [...c.querySelectorAll('tp-yt-paper-item, ytd-menu-service-item-renderer')];
+        const hit = items.find(i => /remove/i.test(i.textContent));
+        if (hit) {
+          const r = hit.getBoundingClientRect();
+          if (r.width && r.height) return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
         }
-      } catch (hoverErr) {
-        return { ok: false, error: 'Could not hover message: ' + hoverErr.message };
       }
-    }
-
-    // Wait for context menu to appear
-    await ytPage.waitForSelector('tp-yt-paper-listbox, ytd-menu-popup-renderer', { timeout: 2000 });
-
-    // Check if "Remove" option exists — if not, we're not a mod
-    const removeClicked = await ytPage.evaluate(() => {
-      const items = [...document.querySelectorAll('tp-yt-paper-item, ytd-menu-service-item-renderer')];
-      const remove = items.find(i => /remove|delete/i.test(i.textContent));
-      if (!remove) return false;
-      remove.click();
-      return true;
+      // Debug: show what menus/items are present
+      const info = [...document.querySelectorAll('tp-yt-paper-listbox, ytd-menu-popup-renderer, yt-live-chat-item-context-menu-renderer, tp-yt-iron-dropdown[opened]')]
+        .map(c => `${c.tagName}[${[...c.querySelectorAll('tp-yt-paper-item,ytd-menu-service-item-renderer')].map(i => i.textContent.trim().slice(0, 25)).join('|')}]`)
+        .join(' / ');
+      return { error: `No Remove found. Menus: ${info || 'none'}` };
     });
 
-    // Close the menu if Remove wasn't found
-    if (!removeClicked) {
-      await ytPage.keyboard.press('Escape');
-      return { ok: false, error: 'Not a moderator in this channel' };
-    }
+    if (removeCoords.error) return { ok: false, error: removeCoords.error };
 
+    // CDP click on the Remove item — isTrusted=true, menu is stable at this point
+    await ytPage.mouse.click(removeCoords.x, removeCoords.y);
     return { ok: true };
   } catch (e) {
-    // Timeout waiting for menu = no menu appeared = not a mod
-    if (e.message.includes('timeout') || e.message.includes('Timeout')) {
-      return { ok: false, error: 'Not a moderator in this channel' };
-    }
     return { ok: false, error: e.message };
   }
 });
@@ -701,6 +671,33 @@ ipcMain.handle('yt:getEmotes', async () => {
     });
 
     return { ok: true, emotes };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+});
+
+ipcMain.handle('yt:showWindow', async () => {
+  if (!ytPage) return { ok: false, error: 'YouTube not connected' };
+  try {
+    const client = await ytPage.target().createCDPSession();
+    const { windowId } = await client.send('Browser.getWindowForTarget');
+    // On Windows, must restore to normal first, then set position in a second call
+    await client.send('Browser.setWindowBounds', { windowId, bounds: { windowState: 'normal' } });
+    await new Promise(r => setTimeout(r, 150));
+    await client.send('Browser.setWindowBounds', { windowId, bounds: { left: 100, top: 100, width: 520, height: 700 } });
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+});
+
+ipcMain.handle('yt:hideWindow', async () => {
+  if (!ytPage) return { ok: false, error: 'YouTube not connected' };
+  try {
+    const client = await ytPage.target().createCDPSession();
+    const { windowId } = await client.send('Browser.getWindowForTarget');
+    await client.send('Browser.setWindowBounds', { windowId, bounds: { left: -9999, top: -9999, width: 900, height: 700 } });
+    return { ok: true };
   } catch (e) {
     return { ok: false, error: e.message };
   }

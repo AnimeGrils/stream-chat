@@ -18,8 +18,8 @@
 body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:100vh;display:flex;flex-direction:column}
 
 /* ── SETUP ── */
-#setup{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:2rem;position:fixed;inset:0;z-index:10;background:var(--bg)}
-.card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:2.5rem;width:100%;max-width:480px}
+#setup{display:flex;align-items:flex-start;justify-content:center;min-height:100vh;padding:1.5rem;position:fixed;inset:0;z-index:10;background:var(--bg);overflow-y:auto}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.5rem 2rem;width:100%;max-width:480px}
 .card h1{font-size:22px;font-weight:600;margin-bottom:4px}
 .card .sub{color:var(--muted);font-size:13px;margin-bottom:2rem}
 .sec{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin:1.6rem 0 1rem;padding-bottom:8px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
@@ -341,6 +341,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
       <span class="auth-username" id="tw-username" style="font-size:12px"></span>
       <button class="auth-btn auth-yt" id="auth-yt-btn" onclick="connectYoutube()">Connect YouTube</button>
       <span class="auth-username" id="yt-username"></span>
+      <button class="logout-btn" id="show-yt-btn" onclick="toggleYoutubeWindow()" style="display:none">show window</button>
       <button class="logout-btn" id="logout-yt-btn" onclick="disconnectYoutube()">disconnect</button>
     </div>
   </div>
@@ -742,6 +743,7 @@ function onYoutubeConnected(channelName){
   el('auth-yt-btn').textContent='✓ YouTube connected';
   el('auth-yt-btn').onclick=null;
   el('logout-yt-btn').className='logout-btn visible';
+  el('show-yt-btn').style.display='inline-flex';
   if(channelName){
     ytDisplayName=channelName;
     sessionStorage.setItem('yt_display_name', channelName);
@@ -753,6 +755,20 @@ function onYoutubeConnected(channelName){
   updateSendUI();
 }
 
+let ytWindowShown = false;
+async function toggleYoutubeWindow(){
+  if(!window.electronAPI) return;
+  if(ytWindowShown){
+    await window.electronAPI.hideYoutubeWindow();
+    ytWindowShown = false;
+    el('show-yt-btn').textContent = 'show window';
+  } else {
+    await window.electronAPI.showYoutubeWindow();
+    ytWindowShown = true;
+    el('show-yt-btn').textContent = 'hide window';
+  }
+}
+
 async function disconnectYoutube(){
   if(window.electronAPI) await window.electronAPI.closeYoutubeChat();
   ytToken=null;
@@ -761,6 +777,9 @@ async function disconnectYoutube(){
   el('auth-yt-btn').textContent='Connect YouTube';
   el('auth-yt-btn').onclick=connectYoutube;
   el('logout-yt-btn').className='logout-btn';
+  el('show-yt-btn').style.display='none';
+  el('show-yt-btn').textContent='show window';
+  ytWindowShown=false;
   el('yt-username').className='auth-username';
   sessionStorage.removeItem('yt_display_name');
   dot('d-yt','');
@@ -1320,20 +1339,32 @@ function renderMessages(){
   const now=Date.now(),s=mode==='streamer';
   const toShow=s?messages.filter(m=>!deletedIds.has(m.id)&&(ownMessageIds.has(m.id)||pingMessageIds.has(m.id)||now-m.ts>=DELAY)):messages.filter(m=>!deletedIds.has(m.id)||mode==='mod');
   el('emptyState').style.display=toShow.length===0?'flex':'none';
-  const rendered=new Map([...area.querySelectorAll('.msg')].map(e=>[e.dataset.id,e]));
   const showSet=new Set(toShow.map(m=>m.id));
-  rendered.forEach((node,id)=>{
+  // Remove/update nodes that shouldn't be shown
+  area.querySelectorAll('.msg').forEach(node=>{
+    const id=node.dataset.id;
     if(!showSet.has(id)){node.remove();return;}
     if(deletedIds.has(id)){
       if(mode==='mod') node.classList.add('msg-deleted');
       else node.remove();
     }
   });
+  // Rebuild in-DOM map after removals
+  const inDom=new Map([...area.querySelectorAll('.msg')].map(e=>[e.dataset.id,e]));
   const atBottom=area.scrollHeight-area.scrollTop-area.clientHeight<80;
   let added=false;
-  toShow.forEach(msg=>{
-    if(rendered.has(msg.id)) return;
-    area.appendChild(buildMsg(msg));
+  toShow.forEach((msg,idx)=>{
+    if(inDom.has(msg.id)) return;
+    const newNode=buildMsg(msg);
+    inDom.set(msg.id,newNode);
+    // Insert in chronological order — find the next already-in-DOM message
+    let insertBefore=null;
+    for(let i=idx+1;i<toShow.length;i++){
+      const next=inDom.get(toShow[i].id);
+      if(next&&next.parentNode===area){insertBefore=next;break;}
+    }
+    if(insertBefore) area.insertBefore(newNode,insertBefore);
+    else area.appendChild(newNode);
     added=true;
   });
   if(added&&!userScrolledUp){ area.scrollTop=area.scrollHeight; }
@@ -1834,7 +1865,7 @@ function startReply(msg){
   // For YouTube, pre-fill @username if input is empty
   if(msg.platform==='youtube'){
     const inp=el('chatInput');
-    if(!inp.value.trim()) inp.value='@'+msg.author+' ';
+    if(!inp.value.trim()) inp.value='@'+msg.author.replace(/^@/,'')+' ';
     setCaretToEnd();
   }
   el('chatInput').focus();
@@ -1866,7 +1897,6 @@ function scrollToMsg(id){
 let ctxTarget = null;
 
 el('chatArea').addEventListener('contextmenu', e => {
-  if(mode !== 'mod') return;
   const msgEl = e.target.closest('.msg');
   if(!msgEl) return;
   e.preventDefault();
@@ -1881,12 +1911,15 @@ function showCtxMenu(x, y, msg){
   const menu = el('ctxMenu');
   const isDel = deletedIds.has(msg.id);
   const preview = msg.text.length > 40 ? msg.text.slice(0,40)+'…' : msg.text;
+  const deleteItem = !isDel
+    ? '<div class="ctx-item danger" data-action="delete">Delete message</div>'
+    : '<div class="ctx-item" style="opacity:.4;cursor:default">Already deleted</div>';
   menu.innerHTML = `
     <div class="ctx-preview">${esc(preview)}</div>
     <div class="ctx-sep"></div>
     <div class="ctx-item" data-action="reply">Reply</div>
     <div class="ctx-sep"></div>
-    ${!isDel ? '<div class="ctx-item danger" data-action="delete">Delete message</div>' : '<div class="ctx-item" style="opacity:.4;cursor:default">Already deleted</div>'}
+    ${deleteItem}
     <div class="ctx-sep"></div>
     <div class="ctx-item" data-action="profile">View profile</div>
   `;

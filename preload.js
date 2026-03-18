@@ -26,6 +26,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Close the YouTube chat scraper
   closeYoutubeChat: () => ipcRenderer.invoke('yt:close'),
 
+  // Bring the YouTube Chrome window on-screen / send it back off
+  showYoutubeWindow: () => ipcRenderer.invoke('yt:showWindow'),
+  hideYoutubeWindow: () => ipcRenderer.invoke('yt:hideWindow'),
+
   // Send a message to YouTube chat
   sendYoutubeMessage: (text) => ipcRenderer.invoke('yt:send', text),
 
