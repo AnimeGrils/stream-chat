@@ -1217,7 +1217,7 @@ function connectTwitch(){
     for(const line of e.data.split('\r\n')){
       if(!line) continue;
       if(line==='PING :tmi.twitch.tv'){twitchWs.send('PONG :tmi.twitch.tv');continue;}
-      if(line.includes('366')||line.includes('JOIN #')) dot('d-tw','ok');
+      if(line.includes('366')||line.includes('JOIN #')){ dot('d-tw','ok'); loadRecentTwitchMsgs(cfg.twCh); }
       if(line.includes('PRIVMSG'))   parseTwitchMsg(line);
       if(line.includes('CLEARMSG'))  parseClearMsg(line);
       if(line.includes('CLEARCHAT')) parseClearChat(line);
@@ -1225,6 +1225,15 @@ function connectTwitch(){
   };
   twitchWs.onerror=()=>dot('d-tw','err');
   twitchWs.onclose=()=>{dot('d-tw','err');setTimeout(connectTwitch,5000);};
+}
+
+async function loadRecentTwitchMsgs(channel){
+  try{
+    const r=await fetch(`https://recent-messages.robotty.de/api/v2/recent-messages/${channel}?limit=150`);
+    if(!r.ok) return;
+    const data=await r.json();
+    (data.messages||[]).forEach(line=>{ if(line.includes('PRIVMSG')) parseTwitchMsg(line); });
+  }catch(e){}
 }
 
 function parseTags(line){
@@ -1249,7 +1258,7 @@ function parseTwitchMsg(line){
   const replyParentText=tags['reply-parent-msg-body']||null;
   addMsg({id,platform:'twitch',author:tags['display-name']||nick,
     text:match[1],emotesTag:tags['emotes']||'',authorId:tags['user-id']||null,badgesTag:tags['badges']||'',badgeInfoTag:tags['badge-info']||'',replyParentId,replyParentUser,replyParentText,
-    color:tags['color']||rndColor(nick),ts:Date.now()});
+    color:tags['color']||rndColor(nick),ts:parseInt(tags['tmi-sent-ts'])||Date.now()});
 }
 function parseClearMsg(line){const id=parseTags(line)['target-msg-id'];if(id)syncDelete(id);}
 function parseClearChat(line){
@@ -1278,6 +1287,7 @@ function parseClearChat(line){
 function addMsg(msg){
   if(messages.find(m=>m.id===msg.id)) return;
   messages.push(msg);
+  messages.sort((a,b)=>a.ts-b.ts);
   msgMap.set(msg.id, msg);
   if(messages.length>400) messages=messages.slice(-400);
   // Track usernames for @ autocomplete
@@ -1384,8 +1394,7 @@ function buildMsg(msg){
   const replyBar = msg.replyParentId ? `<div class="msg-reply-bar" data-scrollto="${esc(msg.replyParentId)}"><span class="msg-reply-author">@${esc(msg.replyParentUser||'?')}</span><span class="msg-reply-text">${esc((msg.replyParentText||'').replace(/\\\\s/g,' ').slice(0,80))}</span></div>` : '';
   div.innerHTML=
     `<span class="msg-time">${time}</span>`+
-    `<div class="msg-body">${replyBar}${badgesHtml}<span class="msg-author" style="color:${msg.color}" data-msgid="${esc(msg.id)}">${esc(msg.author)}</span><span class="msg-sep">:</span><span class="msg-text">${renderedText}</span></div>`+
-    (isMod ? buildModActions(msg, isDel) : '');
+    `<div class="msg-body">${replyBar}${badgesHtml}<span class="msg-author" style="color:${msg.color}" data-msgid="${esc(msg.id)}">${esc(msg.author)}</span><span class="msg-sep">:</span><span class="msg-text">${renderedText}</span></div>`;
   return div;
 }
 
@@ -1918,10 +1927,9 @@ function showCtxMenu(x, y, msg){
     <div class="ctx-preview">${esc(preview)}</div>
     <div class="ctx-sep"></div>
     <div class="ctx-item" data-action="reply">Reply</div>
+    <div class="ctx-item" data-action="profile">View profile</div>
     <div class="ctx-sep"></div>
     ${deleteItem}
-    <div class="ctx-sep"></div>
-    <div class="ctx-item" data-action="profile">View profile</div>
   `;
   menu.style.display = 'block';
   const vw = window.innerWidth, vh = window.innerHeight;

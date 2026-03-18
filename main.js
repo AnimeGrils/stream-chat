@@ -193,9 +193,10 @@ async function injectChatObserver(page) {
       }
 
       const seen = new Set();
+      let msgIndex = 0;
 
-      // Process existing messages
-      container.querySelectorAll('yt-live-chat-text-message-renderer').forEach(el => processMsg(el, seen));
+      // Process existing messages in DOM order — index preserves ordering
+      container.querySelectorAll('yt-live-chat-text-message-renderer').forEach(el => processMsg(el, seen, msgIndex++));
 
       const observer = new MutationObserver(mutations => {
         mutations.forEach(m => {
@@ -203,10 +204,10 @@ async function injectChatObserver(page) {
             if (node.nodeType !== 1) return;
             // Direct message element
             if (node.tagName && node.tagName.toLowerCase() === 'yt-live-chat-text-message-renderer') {
-              processMsg(node, seen);
+              processMsg(node, seen, msgIndex++);
             }
             // Nested (sometimes wrapped)
-            node.querySelectorAll && node.querySelectorAll('yt-live-chat-text-message-renderer').forEach(el => processMsg(el, seen));
+            node.querySelectorAll && node.querySelectorAll('yt-live-chat-text-message-renderer').forEach(el => processMsg(el, seen, msgIndex++));
           });
         });
       });
@@ -218,7 +219,7 @@ async function injectChatObserver(page) {
     // the exact element without relying on text matching or YouTube's ID attributes.
     if (!window.__scMsgMap) window.__scMsgMap = new Map();
 
-    function processMsg(el, seen) {
+    function processMsg(el, seen, index) {
       // Try multiple ID sources — YouTube uses different attrs in different contexts
       const id = el.getAttribute('id') ||
                  el.getAttribute('data-id') ||
@@ -263,6 +264,27 @@ async function injectChatObserver(page) {
       // Get author channel ID from action menu or data attribute
       const authorId = el.getAttribute('author-id') || el.getAttribute('data-author-id') || '';
 
+      // Parse timestamp from #timestamp text content (e.g. "6:12 PM" or "18:12")
+      // YouTube only shows HH:MM, so we combine with today's date.
+      // Add the DOM index as millisecond offset so messages always stay in the correct
+      // order even when multiple messages share the same minute or the stream crosses midnight.
+      let ts = Date.now();
+      const tsText = el.querySelector('#timestamp')?.textContent?.trim();
+      if (tsText) {
+        const m = tsText.match(/(\d+):(\d+)\s*(AM|PM)?/i);
+        if (m) {
+          let h = parseInt(m[1]), min = parseInt(m[2]);
+          const ampm = (m[3] || '').toUpperCase();
+          if (ampm === 'PM' && h < 12) h += 12;
+          if (ampm === 'AM' && h === 12) h = 0;
+          const d = new Date();
+          d.setHours(h, min, 0, 0);
+          // If parsed time is more than 1 hour in the future, it's from yesterday
+          if (d.getTime() > Date.now() + 3600000) d.setDate(d.getDate() - 1);
+          ts = d.getTime() + (index || 0); // index keeps DOM order for same-minute messages
+        }
+      }
+
       window.onYTChatMessage({
         id,
         author,
@@ -270,7 +292,7 @@ async function injectChatObserver(page) {
         authorId,
         isMod,
         platform: 'youtube',
-        ts: Date.now(),
+        ts,
       });
     }
 
