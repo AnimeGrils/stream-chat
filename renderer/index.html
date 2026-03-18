@@ -668,7 +668,8 @@ let allEmotes = [];
 let emoteTab = 'tw';
 let emotesLoaded = false;
 let ytDisplayName = null;
-const twUserList = new Map(); // lowercase -> displayName
+const twUserList = new Map(); // lowercase -> displayName (chatted users)
+const twChattersMap = new Map(); // lowercase -> displayName (all live chatters from API)
 const ytUserList = new Map();
 
 
@@ -1310,7 +1311,7 @@ function onChatInput(e){
 function showUserAc(query){
   const ac = el('acDropdown');
   const q = query.toLowerCase();
-  const list = sendPlatform === 'youtube' ? ytUserList : twUserList;
+  const list = sendPlatform === 'youtube' ? ytUserList : new Map([...twChattersMap, ...twUserList]);
   const matches = [...list.values()]
     .filter(name => name.toLowerCase().includes(q))
     .sort((a,b) => {
@@ -1998,6 +1999,8 @@ async function refreshChatters(){
       }catch(e){}
     }
   }
+  twChattersMap.clear();
+  twChatters.forEach(c=>twChattersMap.set(c.user_name.toLowerCase(),c.user_name));
   const ytChatters=[...ytUserList.values()].sort((a,b)=>a.toLowerCase().localeCompare(b.toLowerCase()));
   twChatters.sort((a,b)=>a.user_name.toLowerCase().localeCompare(b.user_name.toLowerCase()));
   const total=twChatters.length+(ytChatters.length?ytChatters.length:0);
