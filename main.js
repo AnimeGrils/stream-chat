@@ -1,5 +1,7 @@
 const { app, BrowserWindow, ipcMain, session } = require('electron');
 const path = require('path');
+const http = require('http');
+const fs = require('fs');
 const puppeteer = require('puppeteer-core');
 
 let mainWindow = null;
@@ -7,6 +9,42 @@ let ytBrowser = null;
 let ytPage = null;
 let ytObserverActive = false;
 let ytStatus = 'disconnected'; // 'disconnected' | 'connecting' | 'connected' | 'error'
+
+// ═══════ OVERLAY SSE SERVER ══════════════════════════════════════════
+
+const OVERLAY_PORT = 3899;
+let sseClients = [];
+
+function startOverlayServer() {
+  const server = http.createServer((req, res) => {
+    if (req.url === '/events') {
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'Access-Control-Allow-Origin': '*',
+      });
+      res.write(':ok\n\n');
+      sseClients.push(res);
+      req.on('close', () => { sseClients = sseClients.filter(c => c !== res); });
+    } else {
+      const file = path.join(__dirname, 'renderer', 'overlay.html');
+      fs.readFile(file, (err, data) => {
+        if (err) { res.writeHead(404); res.end('Not found'); return; }
+        res.writeHead(200, { 'Content-Type': 'text/html' });
+        res.end(data);
+      });
+    }
+  });
+  server.listen(OVERLAY_PORT, '127.0.0.1');
+}
+
+function broadcastOverlay(data) {
+  const payload = `data: ${JSON.stringify(data)}\n\n`;
+  sseClients.forEach(c => { try { c.write(payload); } catch {} });
+}
+
+ipcMain.on('overlay:msg', (_, data) => broadcastOverlay(data));
 
 // ═══════ MAIN WINDOW ═════════════════════════════════════════════════
 
@@ -22,6 +60,7 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      backgroundThrottling: false,
     },
   });
 
@@ -34,7 +73,7 @@ function createWindow() {
   });
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => { createWindow(); startOverlayServer(); });
 
 // ═══════ AUTO UPDATER ════════════════════════════════════════════════
 

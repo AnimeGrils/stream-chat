@@ -65,6 +65,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
 .delay-badge{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:2px 4px 2px 8px;font-family:var(--mono)}
 .delay-input{width:36px;background:transparent;border:none;border-bottom:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:11px;text-align:center;padding:0 2px;outline:none;-moz-appearance:textfield}
 .delay-input::-webkit-inner-spin-button{-webkit-appearance:none}
+#overlayFontSize::-webkit-inner-spin-button,#overlayFontSize::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
 .delay-input:focus{border-bottom-color:var(--twitch)}
 
 .auth-panel{background:var(--surface);border-bottom:1px solid var(--border);padding:10px 14px;flex-shrink:0}
@@ -341,12 +342,27 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
   <div class="field field-secret"><label>Twitch Token</label><input id="twClientId" type="password" oninput="saveField(this)" onpaste="extractTwitchToken(event)" placeholder="Click above to generate, or paste manually"><button type="button" class="eye-btn" onclick="toggleSecret(this)" title="Show/hide"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
   <div class="field field-secret" style="margin-top:8px"><label>Broadcaster Token <span class="b-opt">polls · predictions · stream info</span></label><input id="twBcToken" type="password" oninput="saveField(this)" onpaste="extractBcToken(event)" placeholder="Optional — click below to generate"><button type="button" class="eye-btn" onclick="toggleSecret(this)" title="Show/hide"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
   <div class="field" style="margin-top:-4px">
-    <button class="btn" style="width:100%;background:var(--surface3);border:1px solid var(--border);color:var(--muted);font-size:12px;padding:7px 0" onclick="getBroadcasterToken()">Get Broadcaster Token</button>
+    <button class="btn" style="width:100%;background:var(--twitch);color:#fff;font-size:12px;padding:7px 0" onclick="getBroadcasterToken()">Get Broadcaster Token</button>
     <p style="font-size:11px;color:var(--muted);margin-top:6px;line-height:1.5">The streamer generates this once and shares it with mods. It only works for polls, predictions and stream info — it cannot send messages.</p>
   </div>
 
   <div class="sec"><span class="badge b-yt">YouTube</span><span class="b-opt">optional</span></div>
   <div class="field"><label>YouTube Channel</label><input id="ytVideoId" oninput="saveField(this)" placeholder="@channelname, channel ID or live URL"></div>
+
+  <div class="sec" style="margin-top:8px"><span style="font-size:11px;color:var(--muted);font-weight:600;letter-spacing:.05em">OBS OVERLAY</span></div>
+  <div class="field">
+    <label>Browser Source URL</label>
+    <div style="display:flex;align-items:center;gap:6px">
+      <input id="overlayUrlDisplay" type="text" readonly value="http://localhost:3899" style="flex:1;cursor:default;opacity:.75">
+      <button type="button" class="btn" id="overlayUrlCopyBtn" style="flex-shrink:0;padding:5px 10px;font-size:11px" onclick="navigator.clipboard.writeText(el('overlayUrlDisplay').value).then(()=>{this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)})">Copy</button>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
+      <label style="font-size:11px;color:var(--muted);margin:0;flex-shrink:0">Font size</label>
+      <input type="number" id="overlayFontSize" min="10" max="40" value="15" style="width:72px;-moz-appearance:textfield;appearance:textfield" oninput="updateOverlayUrl()">
+      <span style="font-size:11px;color:var(--muted)">px</span>
+    </div>
+    <p style="font-size:11px;color:var(--muted);margin-top:6px;line-height:1.5">Add this as a Browser Source in OBS. Shows streamer-view chat — delayed and with deleted messages removed.</p>
+  </div>
 
   <div class="sec" style="margin-top:8px"><span style="font-size:11px;color:var(--muted);font-weight:600;letter-spacing:.05em">APP</span></div>
   <div class="field" style="display:flex;align-items:center;justify-content:space-between;gap:12px">
@@ -582,7 +598,7 @@ restoreFields();
 
 // ═══════ STATE ═══════
 let DELAY = 6000;
-let mode='streamer', cfg={}, messages=[], deletedIds=new Set();
+let mode='streamer', cfg={}, messages=[], deletedIds=new Set(), overlayShownIds=new Set();
 let fbRef=null, twitchWs=null;
 const ytTabId=Math.random().toString(36).slice(2); // unique per tab
 let twToken=null, twUserId=null, twBroadcasterId=null, twDisplayName=null, ytToken=null, twBcToken=null;
@@ -747,6 +763,7 @@ function initFirebase(){
 function syncDelete(id){
   deletedIds.add(id);
   if(fbRef) fbRef.child(id.replace(/[.#$/\[\]]/g,'_')).set(true).catch(()=>{});
+  if(overlayShownIds.has(id)&&window.electronAPI?.overlayMsg) window.electronAPI.overlayMsg({type:'delete',id});
   renderMessages();
 }
 
@@ -1412,7 +1429,56 @@ function addMsg(msg){
   // Track usernames for @ autocomplete
   if(msg.platform==='twitch'&&msg.author) twUserList.set(msg.author.toLowerCase(),msg.author);
   if(msg.platform==='youtube'&&msg.author) ytUserList.set(msg.author.toLowerCase(),msg.author);
+  // Push to overlay after delay — setTimeout fires even when window is minimized
+  if(window.electronAPI?.overlayMsg){
+    const d=(ownMessageIds.has(msg.id)||pingMessageIds.has(msg.id))?0:DELAY;
+    setTimeout(()=>{
+      if(deletedIds.has(msg.id)||overlayShownIds.has(msg.id)) return;
+      overlayShownIds.add(msg.id);
+      const badgeUrls=msg.badgesTag&&msg.platform==='twitch'
+        ?msg.badgesTag.split(',').map(b=>{const[s,v]=b.split('/');return resolveBadge(s,v);}).filter(Boolean)
+        :[];
+      window.electronAPI.overlayMsg({type:'add',msg:{...msg,badgeUrls,segments:buildOverlaySegments(msg.text||'',msg.emotesTag||'')}});
+    },d);
+  }
   renderMessages();
+}
+
+// ═══════ OVERLAY SEGMENTS ═══════
+// Pre-resolves text + Twitch emotes + 7TV emotes into a flat segment array
+// so the overlay doesn't need to do any matching itself.
+function buildOverlaySegments(text,emotesTag){
+  const ranges=[];
+  if(emotesTag){
+    emotesTag.split('/').forEach(e=>{
+      const ci=e.indexOf(':');if(ci<0)return;
+      const id=e.slice(0,ci);
+      e.slice(ci+1).split(',').forEach(pos=>{
+        const[s,en]=pos.split('-').map(Number);
+        ranges.push({id,start:s,end:en});
+      });
+    });
+    ranges.sort((a,b)=>a.start-b.start);
+  }
+  const chars=[...text];
+  const segs=[];
+  let cursor=0;
+  function pushText(t){
+    t.split(' ').forEach((word,i)=>{
+      if(i>0) segs.push({type:'text',value:' '});
+      const stv=sevenTVEmoteMap.get(word);
+      if(stv) segs.push({type:'emote',url:stv.url,name:word});
+      else segs.push({type:'text',value:word});
+    });
+  }
+  ranges.forEach(({id,start,end})=>{
+    if(start>cursor) pushText(chars.slice(cursor,start).join(''));
+    const name=chars.slice(start,end+1).join('');
+    segs.push({type:'emote',url:`https://static-cdn.jtvnw.net/emoticons/v2/${id}/default/dark/1.0`,name});
+    cursor=end+1;
+  });
+  if(cursor<chars.length) pushText(chars.slice(cursor).join(''));
+  return segs;
 }
 
 // ═══════ EMOTE RENDERING ═══════
@@ -2735,6 +2801,12 @@ if(window.electronAPI){
   initUpdateSettings();
 }
 
+function updateOverlayUrl(){
+  const size=parseInt(el('overlayFontSize')?.value)||15;
+  const url=size===15?'http://localhost:3899':`http://localhost:3899?size=${size}`;
+  if(el('overlayUrlDisplay')) el('overlayUrlDisplay').value=url;
+}
+
 function goToSettings(){
   // Snapshot current config so launch() can detect what changed
   el('setup').dataset.prevCfg = JSON.stringify(cfg);
@@ -2749,7 +2821,8 @@ function resetSession(){
   if(twitchWs){try{twitchWs.close();}catch{} twitchWs=null;}
   if(window.electronAPI) window.electronAPI.closeYoutubeChat();
   sessionStorage.clear();
-  messages=[]; deletedIds=new Set(); ownMessageIds=new Set();
+  messages=[]; deletedIds=new Set(); ownMessageIds=new Set(); overlayShownIds=new Set();
+  if(window.electronAPI?.overlayMsg) window.electronAPI.overlayMsg({type:'clear'});
   twToken=null; twUserId=null; twBroadcasterId=null; twDisplayName=null; twBcToken=null;
   ytToken=null; ytDisplayName=null; ytChatId=null; ytNextPage=null;
   pingMessageIds=new Set(); twUserList.clear(); ytUserList.clear();

@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Stream Chat Overlay</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: transparent;
+    overflow: hidden;
+    height: 100vh;
+  }
+
+  /* Fixed to bottom — overflowing messages clip at the top, new messages
+     are always visible at the bottom */
+  #messages {
+    position: fixed;
+    bottom: 10px;
+    left: 10px;
+    right: 10px;
+    max-height: calc(100vh - 20px);
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    overflow: hidden;
+    gap: 5px;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-size: var(--font-size, 15px);
+  }
+
+  .msg {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 3px 4px;
+    padding: 7px 12px;
+    border-radius: 7px;
+    background: rgba(14, 14, 16, 0.82);
+    line-height: 1.45;
+    word-break: break-word;
+    border-left: 3px solid transparent;
+    flex-shrink: 0;
+    backdrop-filter: blur(2px);
+    animation: slideIn 0.18s ease-out;
+  }
+
+  .msg.tw  { border-left-color: #9146ff; }
+  .msg.yt  { border-left-color: #ff4444; }
+  .msg.announcement { border-left-width: 4px; background: rgba(14,14,16,0.9); }
+
+  .badges {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    flex-shrink: 0;
+  }
+
+  .badge-img {
+    width: 18px;
+    height: 18px;
+    vertical-align: middle;
+    display: inline-block;
+  }
+
+  .author {
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+
+  .colon {
+    color: rgba(255,255,255,0.35);
+    flex-shrink: 0;
+  }
+
+  .text {
+    color: #e8e8e8;
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .emote {
+    height: 1.3em;
+    vertical-align: middle;
+    display: inline-block;
+    margin: 0 1px;
+  }
+
+  .announce-icon {
+    font-size: .7em;
+    font-weight: 800;
+    letter-spacing: .05em;
+    padding: 1px 5px;
+    border-radius: 3px;
+    flex-shrink: 0;
+    opacity: .9;
+  }
+
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateX(14px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+
+  @keyframes fadeOut {
+    to { opacity: 0; transform: translateX(14px); }
+  }
+
+  .removing {
+    animation: fadeOut 0.18s ease-in forwards;
+    pointer-events: none;
+  }
+</style>
+</head>
+<body>
+<div id="messages"></div>
+<script>
+const params = new URLSearchParams(location.search);
+const MAX = parseInt(params.get('max')) || 20;
+const fontSize = parseInt(params.get('size')) || 15;
+document.documentElement.style.setProperty('--font-size', fontSize + 'px');
+
+const msgs = []; // { id, el }
+const area = document.getElementById('messages');
+
+const evtSource = new EventSource('/events');
+evtSource.onmessage = e => {
+  const data = JSON.parse(e.data);
+  if (data.type === 'add')    addMsg(data.msg);
+  if (data.type === 'delete') removeMsg(data.id);
+  if (data.type === 'clear')  clearAll();
+};
+
+function addMsg(msg) {
+  const el = buildEl(msg);
+  msgs.push({ id: msg.id, el });
+  area.appendChild(el);
+  while (msgs.length > MAX) {
+    const old = msgs.shift();
+    old.el.remove();
+  }
+}
+
+function removeMsg(id) {
+  const idx = msgs.findIndex(m => m.id === id);
+  if (idx === -1) return;
+  const [entry] = msgs.splice(idx, 1);
+  entry.el.classList.add('removing');
+  entry.el.addEventListener('animationend', () => entry.el.remove(), { once: true });
+}
+
+function clearAll() {
+  msgs.forEach(m => m.el.remove());
+  msgs.length = 0;
+}
+
+function buildEl(msg) {
+  const div = document.createElement('div');
+  const isTw = msg.platform === 'twitch';
+  div.className = 'msg ' + (isTw ? 'tw' : 'yt') + (msg.isAnnouncement ? ' announcement' : '');
+
+  const acColor = msg.announcementColor || '#9146ff';
+  if (msg.isAnnouncement) {
+    div.style.borderLeftColor = acColor;
+    const icon = document.createElement('span');
+    icon.className = 'announce-icon';
+    icon.textContent = '📣';
+    icon.style.background = acColor + '22';
+    icon.style.color = acColor;
+    div.appendChild(icon);
+  }
+
+  // Badges (Twitch only — resolved URLs come from the main app)
+  if (isTw && msg.badgeUrls && msg.badgeUrls.length) {
+    const badgeWrap = document.createElement('span');
+    badgeWrap.className = 'badges';
+    msg.badgeUrls.forEach(url => {
+      const img = document.createElement('img');
+      img.className = 'badge-img';
+      img.src = url;
+      img.alt = '';
+      badgeWrap.appendChild(img);
+    });
+    div.appendChild(badgeWrap);
+  }
+
+  const authorEl = document.createElement('span');
+  authorEl.className = 'author';
+  authorEl.textContent = msg.author || '';
+  authorEl.style.color = msg.color || (isTw ? '#bf94ff' : '#ff7070');
+  div.appendChild(authorEl);
+
+  const colonEl = document.createElement('span');
+  colonEl.className = 'colon';
+  colonEl.textContent = ':';
+  div.appendChild(colonEl);
+
+  const textEl = document.createElement('span');
+  textEl.className = 'text';
+  textEl.innerHTML = renderSegments(msg.segments || [{type:'text', value: msg.text || ''}]);
+  div.appendChild(textEl);
+
+  return div;
+}
+
+function renderSegments(segments) {
+  return segments.map(seg =>
+    seg.type === 'emote'
+      ? `<img class="emote" src="${esc(seg.url)}" alt="${esc(seg.name)}" title="${esc(seg.name)}">`
+      : esc(seg.value)
+  ).join('');
+}
+
+function esc(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+</script>
+</body>
+</html>

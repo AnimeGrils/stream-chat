@@ -62,5 +62,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   removeAllListeners: () => {
     ipcRenderer.removeAllListeners('yt:message');
     ipcRenderer.removeAllListeners('yt:status');
-  }
+  },
+
+  // ── Overlay ───────────────────────────────────────────────────────
+  overlayMsg: (data) => ipcRenderer.send('overlay:msg', data),
 });
