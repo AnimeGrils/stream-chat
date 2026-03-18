@@ -33,6 +33,12 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
 .field input{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;color:var(--text);font-family:var(--mono);font-size:13px;outline:none;transition:border-color .15s}
 .field input:focus{border-color:var(--twitch)}
 .field input::placeholder{color:var(--muted)}
+.field-secret{display:flex;flex-wrap:wrap;align-items:stretch}
+.field-secret label{width:100%}
+.field-secret input{flex:1;width:auto;min-width:0;border-radius:8px 0 0 8px}
+.eye-btn{background:var(--surface2);border:1px solid var(--border);border-left:none;border-radius:0 8px 8px 0;color:var(--muted);padding:0 12px;cursor:pointer;display:flex;align-items:center;flex-shrink:0;transition:color .12s,background .12s}
+.eye-btn:hover{color:var(--text);background:var(--surface3,var(--surface))}
+.eye-btn.revealed{color:var(--twitch)}
 .btn-row{display:flex;gap:10px;margin-top:1.8rem}
 .btn{padding:10px 20px;border-radius:8px;font-family:var(--font);font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all .15s;flex:1}
 .btn-str{background:var(--twitch);color:#fff}.btn-str:hover{filter:brightness(1.15)}
@@ -270,6 +276,31 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
 /* ── PROFILE PANEL ── */
 .profile-panel{position:fixed;top:0;right:-420px;width:380px;height:100vh;background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column;z-index:500;transition:right .25s cubic-bezier(.4,0,.2,1);overflow:hidden}
 .profile-panel.open{right:0}
+.profile-panel.open.shift{right:260px}
+.chatters-panel{position:fixed;top:0;right:-290px;width:260px;height:100vh;background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column;z-index:501;transition:right .25s cubic-bezier(.4,0,.2,1);overflow:hidden}
+.chatters-panel.open{right:0}
+body.chatters-open .profile-panel:not(.open){right:-120px}
+.cp-header{display:flex;align-items:center;gap:8px;padding:14px 16px;border-bottom:1px solid var(--border);flex-shrink:0}
+.cp-title{font-size:13px;font-weight:600;flex:1}
+.cp-count{font-size:11px;color:var(--muted)}
+.cp-btn{background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:14px;padding:3px 5px;border-radius:4px;line-height:1;font-family:var(--font)}
+.cp-btn:hover{color:var(--text);background:var(--surface2)}
+.cp-body{flex:1;overflow-y:auto;padding:8px 0}
+.cp-body::-webkit-scrollbar{width:4px}
+.cp-body::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.cp-section{padding:6px 14px 4px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted)}
+.cp-item{padding:5px 14px;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:6px;transition:background .1s}
+.cp-item:hover{background:var(--surface2)}
+.cp-item.yt{cursor:default}
+.cp-item.yt:hover{background:transparent}
+.cp-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.cp-dot.tw{background:var(--twitch)}
+.cp-dot.yt{background:var(--youtube)}
+.cp-empty{padding:16px 14px;font-size:12px;color:var(--muted)}
+.cp-loading{padding:16px 14px;font-size:12px;color:var(--muted)}
+.chatters-btn{background:transparent;border:1px solid var(--border);color:var(--muted);padding:4px 9px;border-radius:5px;font-size:11px;font-weight:600;cursor:pointer;font-family:var(--font);transition:all .12s}
+.chatters-btn:hover{border-color:var(--twitch);color:var(--text)}
+.chatters-btn.active{border-color:var(--twitch);color:var(--twitch)}
 .pp-header{display:flex;align-items:flex-start;gap:14px;padding:18px 16px 14px;border-bottom:1px solid var(--border);flex-shrink:0;position:relative}
 .pp-close{position:absolute;top:12px;right:12px;background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:18px;line-height:1;padding:4px}
 .pp-close:hover{color:var(--text)}
@@ -340,10 +371,12 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
     <button class="btn" style="width:100%;background:var(--twitch);color:#fff;font-size:12px;padding:7px 0" onclick="getTwitchToken()">Get Twitch Token</button>
   </div>
   <div class="field field-secret"><label>Twitch Token</label><input id="twClientId" type="password" oninput="saveField(this)" onpaste="extractTwitchToken(event)" placeholder="Click above to generate, or paste manually"><button type="button" class="eye-btn" onclick="toggleSecret(this)" title="Show/hide"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+  <div id="tw-scope-warn" style="display:none;font-size:11px;color:var(--amber);background:rgba(255,170,68,.1);border:1px solid rgba(255,170,68,.3);border-radius:5px;padding:7px 10px;margin-top:-2px;line-height:1.5">⚠ Token is missing permissions. Click <b>Get Twitch Token</b> above to re-auth.<br><span id="tw-scope-missing" style="color:var(--muted)"></span></div>
   <div class="field field-secret" style="margin-top:8px"><label>Broadcaster Token <span class="b-opt">polls · predictions · stream info</span></label><input id="twBcToken" type="password" oninput="saveField(this)" onpaste="extractBcToken(event)" placeholder="Optional — click below to generate"><button type="button" class="eye-btn" onclick="toggleSecret(this)" title="Show/hide"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
   <div class="field" style="margin-top:-4px">
     <button class="btn" style="width:100%;background:var(--twitch);color:#fff;font-size:12px;padding:7px 0" onclick="getBroadcasterToken()">Get Broadcaster Token</button>
     <p style="font-size:11px;color:var(--muted);margin-top:6px;line-height:1.5">The streamer generates this once and shares it with mods. It only works for polls, predictions and stream info — it cannot send messages.</p>
+    <div id="bc-scope-warn" style="display:none;font-size:11px;color:var(--amber);background:rgba(255,170,68,.1);border:1px solid rgba(255,170,68,.3);border-radius:5px;padding:7px 10px;margin-top:6px;line-height:1.5">⚠ Broadcaster token is missing permissions. If you are a mod, ask the broadcaster to click <b>Get Broadcaster Token</b> and share the updated token.<br><span id="bc-scope-missing" style="color:var(--muted)"></span></div>
   </div>
 
   <div class="sec"><span class="badge b-yt">YouTube</span><span class="b-opt">optional</span></div>
@@ -392,7 +425,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
       <button class="mode-btn" id="tab-m" onclick="switchMode('mod')">Mod</button>
     </div>
     <div id="delay-badge" class="delay-badge" style="display:none">⏱ <input class="delay-input" id="delaySeconds" type="number" min="0" max="300" value="6" title="Streamer delay (seconds)">s delay</div>
-    <button class="settings-btn" onclick="goToSettings()" title="Back to settings">⚙ Settings</button>
+    <button class="settings-btn" id="settingsBtn" onclick="goToSettings()" title="Back to settings">⚙ Settings<span id="settings-warn" style="display:none;color:var(--amber);margin-left:4px">⚠</span></button>
+    <button class="chatters-btn" id="chattersBtn" onclick="toggleChatters()" title="Community">👥</button>
     <div class="dots">
       <div class="dot"><div class="dc" id="d-tw"></div>Twitch</div>
       <div class="dot"><div class="dc" id="d-yt"></div>YouTube</div>
@@ -472,6 +506,17 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
     <div class="pp-body" id="ppBody"></div>
   </div>
 
+  <!-- Chatters panel -->
+  <div class="chatters-panel" id="chattersPanel">
+    <div class="cp-header">
+      <span class="cp-title">Community</span>
+      <span class="cp-count" id="cpCount"></span>
+      <button class="cp-btn" onclick="refreshChatters()" title="Refresh">↻</button>
+      <button class="cp-btn" onclick="closeChatters()">✕</button>
+    </div>
+    <div class="cp-body" id="cpBody"><div class="cp-loading">Loading…</div></div>
+  </div>
+
   <div id="ctxMenu" class="ctx-menu" style="display:none"></div>
   <!-- Mod modals -->
   <div class="modal-overlay" id="modalOverlay">
@@ -540,7 +585,7 @@ function extractBcToken(e){
     const inp=el('twBcToken');
     const val=inp.value;
     const match=val.match(/[#&]?access_token=([a-zA-Z0-9]+)/);
-    if(match){ inp.value=match[1]; saveField(inp); }
+    if(match){ inp.value=match[1]; saveField(inp); twBcToken=match[1]; checkBroadcasterTokenScopes(); }
   },0);
 }
 
@@ -553,6 +598,7 @@ function extractTwitchToken(e){
     if(match){
       inp.value = match[1];
       saveField(inp);
+      loginTwitch();
     }
   }, 0);
 }
@@ -560,7 +606,7 @@ function extractTwitchToken(e){
 function getTwitchToken(){
   const cid = document.getElementById('twClientId2').value.trim();
   if(!cid){ alert('Enter your Client ID first.'); return; }
-  const scopes = 'moderator:manage:chat_messages+user:write:chat+moderator:manage:banned_users+moderator:manage:warnings+moderator:read:followers+channel:read:subscriptions+moderator:manage:chat_settings+moderator:manage:shoutouts+moderator:manage:announcements+channel:manage:raids';
+  const scopes = 'moderator:manage:chat_messages+user:write:chat+moderator:manage:banned_users+moderator:manage:warnings+moderator:read:followers+channel:read:subscriptions+moderator:manage:chat_settings+moderator:manage:shoutouts+moderator:manage:announcements+channel:manage:raids+moderator:read:chatters+moderation:read';
   const url = `https://id.twitch.tv/oauth2/authorize?client_id=${encodeURIComponent(cid)}&redirect_uri=http://localhost&response_type=token&scope=${scopes}`;
   // Open in default system browser
   if(window.electronAPI && window.electronAPI.openExternal){
@@ -573,7 +619,7 @@ function getTwitchToken(){
 function getBroadcasterToken(){
   const cid = document.getElementById('twClientId2').value.trim();
   if(!cid){ alert('Enter your Client ID first.'); return; }
-  const scopes = 'channel:manage:polls+channel:manage:predictions+channel:manage:broadcast';
+  const scopes = 'channel:manage:polls+channel:manage:predictions+channel:manage:broadcast+moderation:read+channel:read:vips';
   const url = `https://id.twitch.tv/oauth2/authorize?client_id=${encodeURIComponent(cid)}&redirect_uri=http://localhost&response_type=token&scope=${scopes}`;
   if(window.electronAPI && window.electronAPI.openExternal){
     window.electronAPI.openExternal(url);
@@ -740,7 +786,7 @@ function updateModeUI(){
   lbl.className='ml '+(s?'s':'m');
   renderMessages();
 }
-function switchMode(m){mode=m;sessionStorage.setItem('stream_mode',m);updateModeUI();}
+function switchMode(m){mode=m;sessionStorage.setItem('stream_mode',m);updateModeUI();checkBroadcasterTokenScopes();}
 
 // ═══════ FIREBASE ═══════
 function initFirebase(){
@@ -799,6 +845,40 @@ async function onTwitchAuthed(){
     loadTwitchBadges();
   }catch(e){console.warn('Twitch user lookup failed',e);}
   updateSendUI();
+  checkTwitchScopes();
+  checkBroadcasterTokenScopes();
+}
+function updateSettingsWarn(){
+  const any=el('tw-scope-warn').style.display!=='none'||el('bc-scope-warn').style.display!=='none';
+  el('settings-warn').style.display=any?'inline':'none';
+}
+async function checkTwitchScopes(){
+  const REQUIRED=['moderator:manage:chat_messages','user:write:chat','moderator:manage:banned_users','moderator:manage:warnings','moderator:read:followers','channel:read:subscriptions','moderator:manage:chat_settings','moderator:manage:shoutouts','moderator:manage:announcements','channel:manage:raids','moderator:read:chatters','moderation:read'];
+  try{
+    const r=await fetch('https://id.twitch.tv/oauth2/validate',{headers:{Authorization:'OAuth '+twToken}});
+    if(!r.ok) return;
+    const data=await r.json();
+    const have=new Set(data.scopes||[]);
+    const missing=REQUIRED.filter(s=>!have.has(s));
+    el('tw-scope-warn').style.display=missing.length?'block':'none';
+    if(missing.length) el('tw-scope-missing').textContent='Missing: '+missing.join(', ');
+  }catch(e){}
+  updateSettingsWarn();
+}
+async function checkBroadcasterTokenScopes(){
+  if(!twBcToken) return;
+  if(mode!=='streamer'){ el('bc-scope-warn').style.display='none'; updateSettingsWarn(); return; }
+  const REQUIRED=['channel:manage:polls','channel:manage:predictions','channel:manage:broadcast','moderation:read','channel:read:vips'];
+  try{
+    const r=await fetch('https://id.twitch.tv/oauth2/validate',{headers:{Authorization:'OAuth '+twBcToken}});
+    if(!r.ok){ el('bc-scope-warn').style.display='block'; el('bc-scope-missing').textContent=''; updateSettingsWarn(); return; }
+    const data=await r.json();
+    const have=new Set(data.scopes||[]);
+    const missing=REQUIRED.filter(s=>!have.has(s));
+    el('bc-scope-warn').style.display=missing.length?'block':'none';
+    if(missing.length) el('bc-scope-missing').textContent='Missing: '+missing.join(', ');
+  }catch(e){}
+  updateSettingsWarn();
 }
 async function twFetch(url,opts={}){
   const r=await fetch(url,{...opts,headers:{'Authorization':`Bearer ${twToken}`,'Client-Id':cfg.twCid||'',...(opts.headers||{})}});
@@ -1353,7 +1433,7 @@ async function loadRecentTwitchMsgs(channel){
     const r=await fetch(`https://recent-messages.robotty.de/api/v2/recent-messages/${channel}?limit=150`);
     if(!r.ok) return;
     const data=await r.json();
-    const cutoff=Date.now()-30*60*1000;
+    const cutoff=Date.now()-60*60*1000;
     (data.messages||[]).forEach(line=>{
       if(!line.includes('PRIVMSG')) return;
       const m=line.match(/tmi-sent-ts=(\d+)/);
@@ -1862,21 +1942,128 @@ async function modalConfirm(){
 
 
 
+// ═══════ CHATTERS PANEL ═══════
+let chattersLoaded=false, chattersAutoHidden=false;
+function toggleChatters(){
+  const panel=el('chattersPanel');
+  if(panel.classList.contains('open')) closeChatters();
+  else openChatters();
+}
+function openChatters(){
+  el('chattersPanel').classList.add('open');
+  el('chattersBtn').classList.add('active');
+  document.body.classList.add('chatters-open');
+  if(el('profilePanel').classList.contains('open')) el('profilePanel').classList.add('shift');
+  if(!chattersLoaded) refreshChatters();
+}
+function closeChatters(){
+  el('chattersPanel').classList.remove('open');
+  el('chattersBtn').classList.remove('active');
+  document.body.classList.remove('chatters-open');
+  el('profilePanel').classList.remove('shift');
+}
+async function refreshChatters(){
+  chattersLoaded=true;
+  el('cpBody').innerHTML='<div class="cp-loading">Loading…</div>';
+  el('cpCount').textContent='';
+  let twChatters=[], modIds=new Set(), vipIds=new Set(), reAuthNeeded=false;
+  if(twToken&&twBroadcasterId&&twUserId){
+    try{
+      let cursor='';
+      do{
+        const url=`https://api.twitch.tv/helix/chat/chatters?broadcaster_id=${twBroadcasterId}&moderator_id=${twUserId}&first=1000${cursor?'&after='+cursor:''}`;
+        const data=await twFetch(url);
+        twChatters.push(...(data.data||[]));
+        cursor=data.pagination?.cursor||'';
+      }while(cursor);
+    }catch(e){twChatters=[];reAuthNeeded=true;}
+    if(twChatters.length&&twBcToken){
+      try{
+        let cursor='';
+        do{
+          const url=`https://api.twitch.tv/helix/moderation/moderators?broadcaster_id=${twBroadcasterId}&first=100${cursor?'&after='+cursor:''}`;
+          const data=await bcFetch(url);
+          (data.data||[]).forEach(m=>modIds.add(m.user_id));
+          cursor=data.pagination?.cursor||'';
+        }while(cursor);
+      }catch(e){}
+      try{
+        let cursor='';
+        do{
+          const url=`https://api.twitch.tv/helix/channels/vips?broadcaster_id=${twBroadcasterId}&first=100${cursor?'&after='+cursor:''}`;
+          const data=await bcFetch(url);
+          (data.data||[]).forEach(v=>vipIds.add(v.user_id));
+          cursor=data.pagination?.cursor||'';
+        }while(cursor);
+      }catch(e){}
+    }
+  }
+  const ytChatters=[...ytUserList.values()].sort((a,b)=>a.toLowerCase().localeCompare(b.toLowerCase()));
+  twChatters.sort((a,b)=>a.user_name.toLowerCase().localeCompare(b.user_name.toLowerCase()));
+  const total=twChatters.length+(ytChatters.length?ytChatters.length:0);
+  el('cpCount').textContent=total?total+' viewers':'';
+  const cpItem=(c)=>`<div class="cp-item tw" data-uid="${esc(c.user_id)}" data-uname="${esc(c.user_name)}" onclick="openTwitchChatter(this.dataset.uid,this.dataset.uname)" title="${esc(c.user_name)}"><span class="cp-dot tw"></span>${esc(c.user_name)}</div>`;
+  let html='';
+  if(twChatters.length){
+    const broadcaster=twChatters.filter(c=>c.user_id===twBroadcasterId);
+    const mods=twChatters.filter(c=>modIds.has(c.user_id)&&c.user_id!==twBroadcasterId);
+    const vips=twChatters.filter(c=>vipIds.has(c.user_id)&&!modIds.has(c.user_id)&&c.user_id!==twBroadcasterId);
+    const viewers=twChatters.filter(c=>!modIds.has(c.user_id)&&!vipIds.has(c.user_id)&&c.user_id!==twBroadcasterId);
+    if(broadcaster.length){ html+=`<div class="cp-section">Broadcaster</div>`; broadcaster.forEach(c=>{html+=cpItem(c);}); }
+    if(mods.length){ html+=`<div class="cp-section">Moderators (${mods.length})</div>`; mods.forEach(c=>{html+=cpItem(c);}); }
+    if(vips.length){ html+=`<div class="cp-section">VIPs (${vips.length})</div>`; vips.forEach(c=>{html+=cpItem(c);}); }
+    if(viewers.length){ html+=`<div class="cp-section">Viewers (${viewers.length})</div>`; viewers.forEach(c=>{html+=cpItem(c);}); }
+  } else if(reAuthNeeded){
+    html+='<div class="cp-empty" style="color:var(--amber)">⚠ Missing permission. Go to Settings and click <b>Get Twitch Token</b> to re-auth.</div>';
+  } else {
+    html+='<div class="cp-empty">Log in with Twitch to see chatters.</div>';
+  }
+  if(ytChatters.length){
+    html+=`<div class="cp-section" style="margin-top:8px">YouTube (${ytChatters.length})</div>`;
+    ytChatters.forEach(name=>{
+      html+=`<div class="cp-item yt"><span class="cp-dot yt"></span>${esc(name)}</div>`;
+    });
+  }
+  if(!twChatters.length&&!ytChatters.length&&!reAuthNeeded) html='<div class="cp-empty">No chatters yet.</div>';
+  el('cpBody').innerHTML=html;
+}
+
 // ═══════ PROFILE PANEL ═══════
 let profileUser = null;
 
-function openProfile(id) {
-  const msg = msgMap.get(id); if(!msg) return;
+function _openProfilePanel(msg){
   profileUser = msg;
   el('profilePanel').classList.add('open');
+  if(el('chattersPanel').classList.contains('open')){
+    if(window.innerWidth < 680){
+      el('chattersPanel').classList.remove('open');
+      el('chattersBtn').classList.remove('active');
+      document.body.classList.remove('chatters-open');
+      chattersAutoHidden=true;
+    } else {
+      el('profilePanel').classList.add('shift');
+    }
+  }
   renderProfileShell(msg);
-  if (msg.platform === 'twitch') fetchTwitchProfile(msg);
+  if(msg.platform==='twitch') fetchTwitchProfile(msg);
   else renderYoutubeProfile(msg);
+}
+function openProfile(id) {
+  const msg = msgMap.get(id); if(!msg) return;
+  _openProfilePanel(msg);
+}
+function openTwitchChatter(userId, userName){
+  let msg = null;
+  for(const [,m] of msgMap){ if(m.platform==='twitch'&&m.authorId===userId){ msg=m; } }
+  if(!msg) msg={platform:'twitch',author:userName,authorId:userId,color:rndColor(userName),id:'chatter-'+userId};
+  _openProfilePanel(msg);
 }
 
 function closeProfile() {
   el('profilePanel').classList.remove('open');
+  el('profilePanel').classList.remove('shift');
   profileUser = null;
+  if(chattersAutoHidden){ chattersAutoHidden=false; openChatters(); }
 }
 
 function renderProfileShell(msg) {
@@ -2051,7 +2238,7 @@ el('chatArea').addEventListener('click', e => {
 // Close profile panel when clicking outside
 document.addEventListener('click', e => {
   const panel = el('profilePanel');
-  if (panel.classList.contains('open') && !panel.contains(e.target) && !e.target.closest('.msg-author')) {
+  if (panel.classList.contains('open') && !panel.contains(e.target) && !e.target.closest('.msg-author') && !e.target.closest('#chattersPanel') && !e.target.closest('#chattersBtn')) {
     closeProfile();
   }
 });

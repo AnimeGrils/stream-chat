@@ -16,6 +16,7 @@ A desktop app that combines Twitch and YouTube live chat into a single interface
 - [Features](#features)
   - [Chat](#chat)
   - [Moderation](#moderation)
+  - [Community Panel](#community-panel)
   - [Commands Panel](#commands-panel)
   - [OBS Overlay](#obs-overlay-1)
 - [Building from Source](#building-from-source)
@@ -99,6 +100,7 @@ The broadcaster token allows mods to create polls, predictions, and edit stream 
 - Create and manage polls
 - Create and manage predictions
 - Edit stream title and category
+- Show moderators and VIPs in the Community panel
 
 ### OBS Overlay
 
@@ -157,6 +159,23 @@ The profile panel shows the user's account info, follow date, and subscription s
 | **Unban** | Remove a ban |
 
 Deleted and timed-out messages are removed from the chat view and from the OBS overlay. On YouTube, deletions are synced to other connected instances of the app via Firebase.
+
+### Community Panel
+
+Click the **👥** button (top right of chat) to open the Community panel, which shows everyone currently in the chat.
+
+Twitch chatters are grouped by role:
+
+| Group | Description |
+|---|---|
+| **Broadcaster** | The channel owner |
+| **Moderators** | Requires the broadcaster token to be set (see [Broadcaster Token](#broadcaster-token)) |
+| **VIPs** | Requires the broadcaster token to be set |
+| **Viewers** | Everyone else |
+
+YouTube chatters appear in a separate section below.
+
+**Click any username** in the panel to open their profile.
 
 ### Commands Panel
 
