@@ -31,7 +31,8 @@
     ],
     "win": {
       "target": "nsis",
-      "icon": "renderer/icon.ico"
+      "icon": "renderer/icon.ico",
+      "artifactName": "Stream.Chat.Setup.${version}.${ext}"
     },
     "mac": {
       "target": "dmg",
