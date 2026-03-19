@@ -197,6 +197,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
 .ep-item .ep-tip{display:none;position:absolute;bottom:calc(100% + 4px);left:50%;transform:translateX(-50%);background:var(--surface3);border:1px solid var(--border);border-radius:4px;padding:2px 6px;font-size:10px;white-space:nowrap;pointer-events:none;z-index:10}
 .ep-item:hover .ep-tip{display:block}
 .emote-loading{padding:20px;text-align:center;color:var(--muted);font-size:12px;width:100%}
+.ep-section{width:100%;padding:6px 2px 2px;font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
 
 /* ── AUTOCOMPLETE ── */
 .ac-dropdown{position:absolute;bottom:100%;left:0;right:0;background:var(--surface);border:1px solid var(--border);border-radius:8px 8px 0 0;max-height:200px;overflow-y:auto;display:none;z-index:200;padding:4px 0;}
@@ -468,7 +469,7 @@ body.chatters-open .profile-panel:not(.open){right:-120px}
   <!-- Chat input -->
   <div class="chat-input-wrap" id="chatInputWrap">
     <div class="emote-picker" id="emotePicker">
-      <div class="emote-search"><input type="text" id="emoteSearch" placeholder="Search emotes…" oninput="filterEmotes()" placeholder="Search emotes (Twitch + 7TV)…"></div>
+      <div class="emote-search"><input type="text" id="emoteSearch" placeholder="Search emotes…" oninput="filterEmotes()" placeholder="Search emotes (Twitch + 7TV + BTTV)…"></div>
       <div class="emote-grid" id="emoteGrid"><div class="emote-loading">Loading emotes…</div></div>
     </div>
     <div class="cmd-dropdown" id="cmdDropdown">
@@ -677,9 +678,11 @@ let replyToMsg=null; // message being replied to
 // Emote storage
 // twitchEmotes: Map<name, {id, url}>
 // sevenTVEmoteMap: Map<name, {id, url}>
-// allEmotes: [{name, url, source:'tw'|'7tv'}] for picker
+// bttvEmoteMap: Map<name, {id, url}>
+// allEmotes: [{name, url, source:'tw'|'7tv'|'bttv'}] for picker
 let twitchEmoteMap = new Map();
 let sevenTVEmoteMap = new Map();
+let bttvEmoteMap = new Map();
 let allEmotes = [];
 let emoteTab = 'tw';
 let emotesLoaded = false;
@@ -1228,6 +1231,7 @@ async function loadTwitchEmotes(){
     }
   }catch(e){console.warn('Twitch emote load failed',e);}
   load7TVEmotes();
+  loadBTTVEmotes();
   renderEmoteGrid();
 }
 
@@ -1254,6 +1258,28 @@ async function load7TVEmotes(){
   renderEmoteGrid();
 }
 
+async function loadBTTVEmotes(){
+  try{
+    // Global BTTV emotes
+    const g=await fetch('https://api.betterttv.net/3/cached/emotes/global').then(r=>r.json());
+    (g||[]).forEach(e=>{
+      const url=`https://cdn.betterttv.net/emote/${e.id}/1x`;
+      bttvEmoteMap.set(e.code,{id:e.id,url});
+      allEmotes.push({name:e.code,url,source:'bttv'});
+    });
+    // Channel BTTV emotes
+    if(twBroadcasterId){
+      const c=await fetch(`https://api.betterttv.net/3/cached/users/twitch/${twBroadcasterId}`).then(r=>r.json());
+      [...(c.channelEmotes||[]),...(c.sharedEmotes||[])].forEach(e=>{
+        const url=`https://cdn.betterttv.net/emote/${e.id}/1x`;
+        bttvEmoteMap.set(e.code,{id:e.id,url});
+        allEmotes.push({name:e.code,url,source:'bttv'});
+      });
+    }
+  }catch(e){console.warn('BTTV emote load failed',e);}
+  renderEmoteGrid();
+}
+
 // ═══════ EMOTE PICKER UI ═══════
 function toggleEmotePicker(){
   const p=el('emotePicker');
@@ -1277,7 +1303,7 @@ function renderEmoteGrid(){
   const grid=el('emoteGrid');
   const query=el('emoteSearch')?.value?.toLowerCase()||'';
   const ytMode=sendPlatform==='youtube';
-  const filtered=allEmotes.filter(e=>(ytMode?(e.source==='yt'||e.source==='7tv'):e.source!=='yt')&&(!query||e.name.toLowerCase().includes(query)));
+  const filtered=allEmotes.filter(e=>(ytMode?(e.source==='yt'||e.source==='7tv'||e.source==='bttv'):e.source!=='yt')&&(!query||e.name.toLowerCase().includes(query)));
   if(!emotesLoaded&&filtered.length===0){
     grid.innerHTML='<div class="emote-loading">Loading emotes…</div>'; return;
   }
@@ -1285,13 +1311,22 @@ function renderEmoteGrid(){
     grid.innerHTML=`<div class="emote-loading">${ytMode&&!query?'No YouTube emotes loaded yet':'No emotes found'}</div>`; return;
   }
   grid.innerHTML='';
-  filtered.slice(0,300).forEach(e=>{
-    const div=document.createElement('div');
-    div.className='ep-item';
-    div.title=e.name+' ('+e.source+')';
-    div.innerHTML=`<img src="${safeUrl(e.url)}" alt="${esc(e.name)}" loading="lazy"><span class="ep-tip">${esc(e.name)}</span>`;
-    div.onmousedown=(ev)=>{ev.preventDefault();insertEmote(e.name);};
-    grid.appendChild(div);
+  const sections=[{key:'tw',label:'Twitch'},{key:'7tv',label:'7TV'},{key:'bttv',label:'BTTV'},{key:'yt',label:'YouTube'}];
+  sections.forEach(({key,label})=>{
+    const group=filtered.filter(e=>e.source===key).slice(0,200);
+    if(!group.length) return;
+    const header=document.createElement('div');
+    header.className='ep-section';
+    header.textContent=label;
+    grid.appendChild(header);
+    group.forEach(e=>{
+      const div=document.createElement('div');
+      div.className='ep-item';
+      div.title=e.name;
+      div.innerHTML=`<img src="${safeUrl(e.url)}" alt="${esc(e.name)}" loading="lazy"><span class="ep-tip">${esc(e.name)}</span>`;
+      div.onmousedown=(ev)=>{ev.preventDefault();insertEmote(e.name);};
+      grid.appendChild(div);
+    });
   });
 }
 
@@ -1371,7 +1406,7 @@ function commitUserAc(name){
 function showAc(query){
   const ac = el('acDropdown');
   const q = query.toLowerCase();
-  const matches = allEmotes.filter(e => (sendPlatform==='youtube'?(e.source==='yt'||e.source==='7tv'):e.source!=='yt') && e.name.toLowerCase().includes(q)).slice(0, 12);
+  const matches = allEmotes.filter(e => (sendPlatform==='youtube'?(e.source==='yt'||e.source==='7tv'||e.source==='bttv'):e.source!=='yt') && e.name.toLowerCase().includes(q)).slice(0, 12);
   if(matches.length === 0){ closeAc(); return; }
   acSelectedIndex = -1;
   ac.innerHTML = '';
@@ -1571,7 +1606,7 @@ function buildOverlaySegments(text,emotesTag){
   function pushText(t){
     t.split(' ').forEach((word,i)=>{
       if(i>0) segs.push({type:'text',value:' '});
-      const stv=sevenTVEmoteMap.get(word);
+      const stv=sevenTVEmoteMap.get(word)||bttvEmoteMap.get(word);
       if(stv) segs.push({type:'emote',url:stv.url,name:word});
       else segs.push({type:'text',value:word});
     });
@@ -1621,7 +1656,7 @@ function renderMsgText(text, emotesTag){
     const words=seg.value.split(' ');
     words.forEach((word,i)=>{
       if(i>0) final.push({type:'text',value:' '});
-      const stv=sevenTVEmoteMap.get(word);
+      const stv=sevenTVEmoteMap.get(word)||bttvEmoteMap.get(word);
       if(stv) final.push({type:'emote',url:stv.url,name:word});
       else    final.push({type:'text',value:word});
     });
