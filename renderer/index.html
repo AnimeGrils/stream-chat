@@ -113,6 +113,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
 .msg:hover .msg-actions{opacity:1}
 .msg.msg-deleted{opacity:.45}
 .msg.msg-deleted .msg-text{text-decoration:line-through}
+.del-label{font-size:11px;margin-left:2px}
 .msg.msg-ping{background:rgba(255,170,68,.22)}
 .msg.msg-announcement{background:rgba(145,70,255,.07)}
 .announce-tag{display:inline-block;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;padding:1px 5px;border-radius:3px;margin-right:5px;vertical-align:middle}
@@ -381,6 +382,13 @@ body.chatters-open .profile-panel:not(.open){right:-120px}
 
   <div class="sec"><span class="badge b-yt">YouTube</span><span class="b-opt">optional</span></div>
   <div class="field"><label>YouTube Channel</label><input id="ytVideoId" oninput="saveField(this)" placeholder="@channelname, channel ID or live URL"></div>
+  <div class="field" style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+    <label style="margin:0">Auto-connect YouTube on launch</label>
+    <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+      <input type="checkbox" id="ytAutoConnectToggle" onchange="setYtAutoConnect(this.checked)" style="width:16px;height:16px;cursor:pointer">
+      <span id="ytAutoConnectLabel" style="font-size:11px;color:var(--muted)">Off</span>
+    </label>
+  </div>
 
   <div class="sec" style="margin-top:8px"><span style="font-size:11px;color:var(--muted);font-weight:600;letter-spacing:.05em">OBS OVERLAY</span></div>
   <div class="field">
@@ -632,19 +640,27 @@ function saveField(input){
   localStorage.setItem('sc_'+input.id, input.value);
 }
 
+function setYtAutoConnect(enabled){
+  localStorage.setItem('sc_ytAutoConnect', enabled?'true':'false');
+  el('ytAutoConnectLabel').textContent=enabled?'On':'Off';
+}
+
 function restoreFields(){
   SETUP_FIELDS.forEach(id=>{
     const saved=localStorage.getItem('sc_'+id);
     const el=document.getElementById(id);
     if(saved&&el) el.value=saved;
   });
+  const ytAuto=localStorage.getItem('sc_ytAutoConnect')==='true';
+  el('ytAutoConnectToggle').checked=ytAuto;
+  el('ytAutoConnectLabel').textContent=ytAuto?'On':'Off';
 }
 
 restoreFields();
 
 // ═══════ STATE ═══════
 let DELAY = 6000;
-let mode='streamer', cfg={}, messages=[], deletedIds=new Set(), overlayShownIds=new Set();
+let mode='streamer', cfg={}, messages=[], deletedIds=new Map(), overlayShownIds=new Set();
 let fbRef=null, twitchWs=null;
 const ytTabId=Math.random().toString(36).slice(2); // unique per tab
 let twToken=null, twUserId=null, twBroadcasterId=null, twDisplayName=null, ytToken=null, twBcToken=null;
@@ -766,8 +782,8 @@ function initApp(){
   updateModeUI();
   if(cfg.fbUrl&&cfg.fbKey) initFirebase(); else showBanner('bn-fbw');
   connectTwitch();
-  // YouTube connects via the Connect YouTube button — nothing to init here
-  if(!cfg.ytVid) showBanner('bn-noyt');
+  if(cfg.ytVid&&localStorage.getItem('sc_ytAutoConnect')==='true') connectYoutube();
+  else if(!cfg.ytVid) showBanner('bn-noyt');
   updateSendUI();
   renderLoop();
 }
@@ -797,7 +813,9 @@ function initFirebase(){
     const db=firebase.database(app);
     // Deleted message sync
     fbRef=db.ref('stream-chat/deleted');
-    fbRef.on('child_added',snap=>{deletedIds.add(snap.key);renderMessages();},()=>{dot('d-fb','err');showBanner('bn-fbw');});
+    const fbDelHandler=snap=>{const v=snap.val();const by=(v&&v.by)?v.by:null;if(!deletedIds.has(snap.key)||deletedIds.get(snap.key)===null)deletedIds.set(snap.key,by);renderMessages();};
+    fbRef.on('child_added',fbDelHandler,()=>{dot('d-fb','err');showBanner('bn-fbw');});
+    fbRef.on('child_changed',fbDelHandler);
     fbRef.once('value',()=>dot('d-fb','ok'),()=>{dot('d-fb','err');showBanner('bn-fbw');});
     // YouTube messages come via Electron IPC scraper — no Firebase bridge needed
   }catch{dot('d-fb','err');showBanner('bn-fbw');}
@@ -807,9 +825,9 @@ function initFirebase(){
 
 
 
-function syncDelete(id){
-  deletedIds.add(id);
-  if(fbRef) fbRef.child(id.replace(/[.#$/\[\]]/g,'_')).set(true).catch(()=>{});
+function syncDelete(id, by=null){
+  deletedIds.set(id, by);
+  if(fbRef) fbRef.child(id.replace(/[.#$/\[\]]/g,'_')).set(by?{by}:true).catch(()=>{});
   if(overlayShownIds.has(id)&&window.electronAPI?.overlayMsg) window.electronAPI.overlayMsg({type:'delete',id});
   renderMessages();
 }
@@ -1007,7 +1025,7 @@ async function deleteTwitchMsg(id,btn){
   try{
     const r=await fetch(`https://api.twitch.tv/helix/moderation/chat?broadcaster_id=${twBroadcasterId}&moderator_id=${twUserId}&message_id=${id}`,
       {method:'DELETE',headers:{'Authorization':`Bearer ${twToken}`,'Client-Id':cfg.twCid}});
-    if(r.status===204){syncDelete(id);}
+    if(r.status===204){syncDelete(id, twDisplayName||null);}
     else{const j=await r.json().catch(()=>({}));flashErr('Twitch delete failed: '+(j.message||r.status));setBtn(btn,'','delete');}
   }catch(e){flashErr('Twitch error: '+e.message);setBtn(btn,'','delete');}
 }
@@ -1024,7 +1042,7 @@ async function deleteYoutubeMsg(id,btn,authorId,text){
   try{
     await debugYtDelete(id, authorId, text);
     const result=await window.electronAPI.deleteYoutubeMessage({msgId:id,authorId:authorId||'',text:text||''});
-    if(result.ok){syncDelete(id);}
+    if(result.ok){syncDelete(id, twDisplayName||null);}
     else{flashErr('YouTube delete failed: '+(result.error||'Not a moderator?'));setBtn(btn,'','delete');}
   }catch(e){flashErr('YouTube error: '+e.message);setBtn(btn,'','delete');}
 }
@@ -1483,7 +1501,7 @@ function parseTwitchUserNotice(line){
     isAnnouncement:true,announcementColor:announceColor});
 }
 
-function parseClearMsg(line){const id=parseTags(line)['target-msg-id'];if(id)syncDelete(id);}
+function parseClearMsg(line){const id=parseTags(line)['target-msg-id'];if(!id||deletedIds.get(id))return;syncDelete(id);}
 function parseClearChat(line){
   const tags=parseTags(line);
   const parts=line.trim().split(' ');
@@ -1627,8 +1645,11 @@ function renderMessages(){
     const id=node.dataset.id;
     if(!showSet.has(id)){node.remove();return;}
     if(deletedIds.has(id)){
-      if(mode==='mod') node.classList.add('msg-deleted');
-      else node.remove();
+      if(mode==='mod'){
+        node.classList.add('msg-deleted');
+        const label=node.querySelector('.del-label');
+        if(label){const by=deletedIds.get(id);label.textContent=by?` (Deleted by ${by})`:' (Deleted by a moderator)';}
+      } else node.remove();
     }
   });
   // Rebuild in-DOM map after removals
@@ -1662,14 +1683,16 @@ function buildMsg(msg){
   const t=new Date(msg.ts);
   const time=t.getHours().toString().padStart(2,'0')+':'+t.getMinutes().toString().padStart(2,'0');
   const isDel=deletedIds.has(msg.id);
+  const delBy=isDel?deletedIds.get(msg.id):null;
   const isMod=mode==='mod';
   const renderedText=renderMsgText(msg.text,msg.emotesTag||'');
   const badgesHtml = buildBadgeImgs(msg);
   const replyBar = msg.replyParentId ? `<div class="msg-reply-bar" data-scrollto="${esc(msg.replyParentId)}"><span class="msg-reply-author">@${esc(msg.replyParentUser||'?')}</span><span class="msg-reply-text">${esc((msg.replyParentText||'').replace(/\\\\s/g,' ').slice(0,80))}</span></div>` : '';
   const announceTag = isAnnounce ? `<span class="announce-tag" style="background:${msg.announcementColor}22;color:${msg.announcementColor};border:1px solid ${msg.announcementColor}44">📣</span>` : '';
+  const delLabel=isDel?(delBy?` (Deleted by ${esc(delBy)})`:' (Deleted by a moderator)'):'';
   div.innerHTML=
     `<span class="msg-time">${time}</span>`+
-    `<div class="msg-body">${replyBar}${announceTag}${badgesHtml}<span class="msg-author" style="color:${msg.color}" data-msgid="${esc(msg.id)}">${esc(msg.author)}</span><span class="msg-sep">:</span><span class="msg-text">${renderedText}</span></div>`;
+    `<div class="msg-body">${replyBar}${announceTag}${badgesHtml}<span class="msg-author" style="color:${msg.color}" data-msgid="${esc(msg.id)}">${esc(msg.author)}</span><span class="msg-sep">:</span><span class="msg-text">${renderedText}</span><span class="del-label">${delLabel}</span></div>`;
   return div;
 }
 
@@ -3017,7 +3040,7 @@ function resetSession(){
   if(twitchWs){try{twitchWs.close();}catch{} twitchWs=null;}
   if(window.electronAPI) window.electronAPI.closeYoutubeChat();
   sessionStorage.clear();
-  messages=[]; deletedIds=new Set(); ownMessageIds=new Set(); overlayShownIds=new Set();
+  messages=[]; deletedIds=new Map(); ownMessageIds=new Set(); overlayShownIds=new Set();
   if(window.electronAPI?.overlayMsg) window.electronAPI.overlayMsg({type:'clear'});
   twToken=null; twUserId=null; twBroadcasterId=null; twDisplayName=null; twBcToken=null;
   ytToken=null; ytDisplayName=null; ytChatId=null; ytNextPage=null;
