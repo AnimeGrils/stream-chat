@@ -828,9 +828,10 @@ function initFirebase(){
 
 
 
+const fbKey=id=>id.replace(/[.#$/\[\]]/g,'_');
 function syncDelete(id, by=null){
-  deletedIds.set(id, by);
-  if(fbRef) fbRef.child(id.replace(/[.#$/\[\]]/g,'_')).set(by?{by}:true).catch(()=>{});
+  deletedIds.set(fbKey(id), by);
+  if(fbRef) fbRef.child(fbKey(id)).set(by?{by}:true).catch(()=>{});
   if(overlayShownIds.has(id)&&window.electronAPI?.overlayMsg) window.electronAPI.overlayMsg({type:'delete',id});
   renderMessages();
 }
@@ -1011,6 +1012,9 @@ if(window.electronAPI){
     msg.platform='youtube';
     addMsg(msg);
     // Also write to Firebase bridge if we're the leader
+  });
+  window.electronAPI.onYoutubeDeleted(id=>{
+    if(!deletedIds.get(fbKey(id))) syncDelete(id, null);
   });
   window.electronAPI.onYoutubeStatus(({status,detail})=>{
     if(status==='connected') dot('d-yt','ok');
@@ -1536,7 +1540,7 @@ function parseTwitchUserNotice(line){
     isAnnouncement:true,announcementColor:announceColor});
 }
 
-function parseClearMsg(line){const id=parseTags(line)['target-msg-id'];if(!id||deletedIds.get(id))return;syncDelete(id);}
+function parseClearMsg(line){const id=parseTags(line)['target-msg-id'];if(!id||deletedIds.get(fbKey(id)))return;syncDelete(id);}
 function parseClearChat(line){
   const tags=parseTags(line);
   const parts=line.trim().split(' ');
@@ -1573,7 +1577,7 @@ function addMsg(msg){
   if(window.electronAPI?.overlayMsg){
     const d=(ownMessageIds.has(msg.id)||pingMessageIds.has(msg.id))?0:DELAY;
     setTimeout(()=>{
-      if(deletedIds.has(msg.id)||overlayShownIds.has(msg.id)) return;
+      if(deletedIds.has(fbKey(msg.id))||overlayShownIds.has(msg.id)) return;
       overlayShownIds.add(msg.id);
       const badgeUrls=msg.badgesTag&&msg.platform==='twitch'
         ?msg.badgesTag.split(',').map(b=>{const[s,v]=b.split('/');return resolveBadge(s,v);}).filter(Boolean)
@@ -1672,18 +1676,18 @@ function renderMsgText(text, emotesTag){
 function renderMessages(){
   const area=document.getElementById('chatArea');
   const now=Date.now(),s=mode==='streamer';
-  const toShow=s?messages.filter(m=>!deletedIds.has(m.id)&&(ownMessageIds.has(m.id)||pingMessageIds.has(m.id)||now-m.ts>=DELAY)):messages.filter(m=>!deletedIds.has(m.id)||mode==='mod');
+  const toShow=s?messages.filter(m=>!deletedIds.has(fbKey(m.id))&&(ownMessageIds.has(m.id)||pingMessageIds.has(m.id)||now-m.ts>=DELAY)):messages.filter(m=>!deletedIds.has(fbKey(m.id))||mode==='mod');
   el('emptyState').style.display=toShow.length===0?'flex':'none';
   const showSet=new Set(toShow.map(m=>m.id));
   // Remove/update nodes that shouldn't be shown
   area.querySelectorAll('.msg').forEach(node=>{
     const id=node.dataset.id;
     if(!showSet.has(id)){node.remove();return;}
-    if(deletedIds.has(id)){
+    if(deletedIds.has(fbKey(id))){
       if(mode==='mod'){
         node.classList.add('msg-deleted');
         const label=node.querySelector('.del-label');
-        if(label){const by=deletedIds.get(id);label.textContent=by?` (Deleted by ${by})`:' (Deleted by a moderator)';}
+        if(label){const by=deletedIds.get(fbKey(id));label.textContent=by?` (Deleted by ${by})`:' (Deleted by a moderator)';}
       } else node.remove();
     }
   });
@@ -1717,8 +1721,8 @@ function buildMsg(msg){
   div.dataset.id=msg.id;
   const t=new Date(msg.ts);
   const time=t.getHours().toString().padStart(2,'0')+':'+t.getMinutes().toString().padStart(2,'0');
-  const isDel=deletedIds.has(msg.id);
-  const delBy=isDel?deletedIds.get(msg.id):null;
+  const isDel=deletedIds.has(fbKey(msg.id));
+  const delBy=isDel?deletedIds.get(fbKey(msg.id)):null;
   const isMod=mode==='mod';
   const renderedText=renderMsgText(msg.text,msg.emotesTag||'');
   const badgesHtml = buildBadgeImgs(msg);
@@ -2208,7 +2212,7 @@ async function fetchTwitchProfile(msg) {
       </div>` : ''}
       <div>
         <div class="pp-section-title">Message history this session (${history.length})</div>
-        <div class="pp-history">${history.length ? history.map(m=>`<div class="pp-hist-msg${deletedIds.has(m.id)?' deleted-hist':''}">${esc(m.text)}</div>`).join('') : '<div class="pp-loading">No messages yet</div>'}</div>
+        <div class="pp-history">${history.length ? history.map(m=>`<div class="pp-hist-msg${deletedIds.has(fbKey(m.id))?' deleted-hist':''}">${esc(m.text)}</div>`).join('') : '<div class="pp-loading">No messages yet</div>'}</div>
       </div>
     `;
   } catch(e) {
@@ -2242,7 +2246,7 @@ function renderYoutubeProfile(msg) {
     </div>` : ''}
     <div>
       <div class="pp-section-title">Message history this session (${history.length})</div>
-      <div class="pp-history">${history.length ? history.map(m=>`<div class="pp-hist-msg${deletedIds.has(m.id)?' deleted-hist':''}">${esc(m.text)}</div>`).join('') : '<div class="pp-loading">No messages yet</div>'}</div>
+      <div class="pp-history">${history.length ? history.map(m=>`<div class="pp-hist-msg${deletedIds.has(fbKey(m.id))?' deleted-hist':''}">${esc(m.text)}</div>`).join('') : '<div class="pp-loading">No messages yet</div>'}</div>
     </div>
   `;
 }
@@ -2317,7 +2321,7 @@ function refreshModButtons(username){
     const actions=node.querySelector('.msg-actions');
     if(!actions) return;
     const tmp=document.createElement('div');
-    tmp.innerHTML=buildModActions(msg,deletedIds.has(msg.id));
+    tmp.innerHTML=buildModActions(msg,deletedIds.has(fbKey(msg.id)));
     actions.replaceWith(tmp.firstElementChild);
   });
 }
@@ -2878,7 +2882,7 @@ el('chatArea').addEventListener('contextmenu', e => {
 
 function showCtxMenu(x, y, msg){
   const menu = el('ctxMenu');
-  const isDel = deletedIds.has(msg.id);
+  const isDel = deletedIds.has(fbKey(msg.id));
   const preview = msg.text.length > 40 ? msg.text.slice(0,40)+'…' : msg.text;
   const deleteItem = !isDel
     ? '<div class="ctx-item danger" data-action="delete">Delete message</div>'

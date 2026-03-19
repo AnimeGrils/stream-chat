@@ -58,10 +58,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('yt:status', (_, status) => cb(status));
   },
 
+  // Called when a YouTube message is detected as deleted via DOM observation
+  onYoutubeDeleted: (cb) => {
+    ipcRenderer.on('yt:deleted', (_, id) => cb(id));
+  },
+
   // Remove all listeners (cleanup)
   removeAllListeners: () => {
     ipcRenderer.removeAllListeners('yt:message');
     ipcRenderer.removeAllListeners('yt:status');
+    ipcRenderer.removeAllListeners('yt:deleted');
   },
 
   // ── Overlay ───────────────────────────────────────────────────────

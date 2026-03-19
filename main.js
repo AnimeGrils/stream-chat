@@ -181,6 +181,10 @@ function sendMessage(msg) {
   if (mainWindow) mainWindow.webContents.send('yt:message', msg);
 }
 
+function sendDeletion(id) {
+  if (mainWindow) mainWindow.webContents.send('yt:deleted', id);
+}
+
 async function closeYoutubeChat() {
   ytObserverActive = false;
   if (ytBrowser) {
@@ -219,6 +223,10 @@ async function injectChatObserver(page) {
     sendMessage(msg);
   });
 
+  await page.exposeFunction('onYTChatDeleted', (id) => {
+    sendDeletion(id);
+  });
+
   await page.evaluate(() => {
     // Wait for chat container to appear
     function observe() {
@@ -235,7 +243,7 @@ async function injectChatObserver(page) {
       let msgIndex = 0;
 
       // Process existing messages in DOM order — index preserves ordering
-      container.querySelectorAll('yt-live-chat-text-message-renderer').forEach(el => processMsg(el, seen, msgIndex++));
+      container.querySelectorAll('yt-live-chat-text-message-renderer').forEach(el => processMsg(el, seen, msgIndex++, false));
 
       const observer = new MutationObserver(mutations => {
         mutations.forEach(m => {
@@ -243,10 +251,10 @@ async function injectChatObserver(page) {
             if (node.nodeType !== 1) return;
             // Direct message element
             if (node.tagName && node.tagName.toLowerCase() === 'yt-live-chat-text-message-renderer') {
-              processMsg(node, seen, msgIndex++);
+              processMsg(node, seen, msgIndex++, true);
             }
             // Nested (sometimes wrapped)
-            node.querySelectorAll && node.querySelectorAll('yt-live-chat-text-message-renderer').forEach(el => processMsg(el, seen, msgIndex++));
+            node.querySelectorAll && node.querySelectorAll('yt-live-chat-text-message-renderer').forEach(el => processMsg(el, seen, msgIndex++, true));
           });
         });
       });
@@ -258,7 +266,7 @@ async function injectChatObserver(page) {
     // the exact element without relying on text matching or YouTube's ID attributes.
     if (!window.__scMsgMap) window.__scMsgMap = new Map();
 
-    function processMsg(el, seen, index) {
+    function processMsg(el, seen, index, isLive) {
       // Try multiple ID sources — YouTube uses different attrs in different contexts
       const id = el.getAttribute('id') ||
                  el.getAttribute('data-id') ||
@@ -303,24 +311,24 @@ async function injectChatObserver(page) {
       // Get author channel ID from action menu or data attribute
       const authorId = el.getAttribute('author-id') || el.getAttribute('data-author-id') || '';
 
-      // Parse timestamp from #timestamp text content (e.g. "6:12 PM" or "18:12")
-      // YouTube only shows HH:MM, so we combine with today's date.
-      // Add the DOM index as millisecond offset so messages always stay in the correct
-      // order even when multiple messages share the same minute or the stream crosses midnight.
+      // Live messages use Date.now() for second-level precision so they interleave
+      // correctly with Twitch messages. Historical messages (already in DOM on connect)
+      // use the parsed HH:MM timestamp to preserve their approximate original order.
       let ts = Date.now();
-      const tsText = el.querySelector('#timestamp')?.textContent?.trim();
-      if (tsText) {
-        const m = tsText.match(/(\d+):(\d+)\s*(AM|PM)?/i);
-        if (m) {
-          let h = parseInt(m[1]), min = parseInt(m[2]);
-          const ampm = (m[3] || '').toUpperCase();
-          if (ampm === 'PM' && h < 12) h += 12;
-          if (ampm === 'AM' && h === 12) h = 0;
-          const d = new Date();
-          d.setHours(h, min, 0, 0);
-          // If parsed time is more than 1 hour in the future, it's from yesterday
-          if (d.getTime() > Date.now() + 3600000) d.setDate(d.getDate() - 1);
-          ts = d.getTime() + (index || 0); // index keeps DOM order for same-minute messages
+      if (!isLive) {
+        const tsText = el.querySelector('#timestamp')?.textContent?.trim();
+        if (tsText) {
+          const m = tsText.match(/(\d+):(\d+)\s*(AM|PM)?/i);
+          if (m) {
+            let h = parseInt(m[1]), min = parseInt(m[2]);
+            const ampm = (m[3] || '').toUpperCase();
+            if (ampm === 'PM' && h < 12) h += 12;
+            if (ampm === 'AM' && h === 12) h = 0;
+            const d = new Date();
+            d.setHours(h, min, 0, 0);
+            if (d.getTime() > Date.now() + 3600000) d.setDate(d.getDate() - 1);
+            ts = d.getTime() + (index || 0);
+          }
         }
       }
 
@@ -333,6 +341,17 @@ async function injectChatObserver(page) {
         platform: 'youtube',
         ts,
       });
+
+      // Watch for YouTube setting is-deleted on this element (happens when any mod deletes it)
+      if (!el.hasAttribute('is-deleted')) {
+        const delObs = new MutationObserver(() => {
+          if (el.hasAttribute('is-deleted')) {
+            delObs.disconnect();
+            window.onYTChatDeleted(id);
+          }
+        });
+        delObs.observe(el, { attributes: true, attributeFilter: ['is-deleted'] });
+      }
     }
 
     observe();
