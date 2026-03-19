@@ -764,7 +764,16 @@ ipcMain.handle('yt:showWindow', async () => {
     // On Windows, must restore to normal first, then set position in a second call
     await client.send('Browser.setWindowBounds', { windowId, bounds: { windowState: 'normal' } });
     await new Promise(r => setTimeout(r, 150));
-    await client.send('Browser.setWindowBounds', { windowId, bounds: { left: 100, top: 100, width: 520, height: 700 } });
+    await client.send('Browser.setWindowBounds', { windowId, bounds: { left: 100, top: 120, width: 520, height: 700 } });
+    await ytPage.bringToFront();
+    // On Windows, use SetForegroundWindow via PowerShell to win the OS-level focus battle
+    if (process.platform === 'win32' && ytBrowser?.process()?.pid) {
+      const { exec } = require('child_process');
+      const pid = ytBrowser.process().pid;
+      const script = `$p=Get-Process -Id ${pid} -EA 0;if($p -and $p.MainWindowHandle -ne [IntPtr]::Zero){Add-Type -Name W -Namespace U -MemberDefinition '[DllImport("user32.dll")]public static extern bool SetForegroundWindow(IntPtr h);';[U.W]::SetForegroundWindow($p.MainWindowHandle)}`;
+      const encoded = Buffer.from(script, 'utf16le').toString('base64');
+      exec(`powershell -NoProfile -NonInteractive -WindowStyle Hidden -EncodedCommand ${encoded}`, () => {});
+    }
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e.message };
