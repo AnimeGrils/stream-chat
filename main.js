@@ -285,16 +285,22 @@ async function injectChatObserver(page) {
       const avatarEl = el.querySelector('yt-img-shadow img, #author-photo img');
 
       const author = authorEl ? authorEl.textContent.trim() : '';
-      // Extract text + emote names (emotes are <img> with alt text)
+      // Extract text + emoji runs (emoji are <img> elements with alt text and src)
       let text = '';
+      const runs = [];
       if (msgEl) {
         msgEl.childNodes.forEach(node => {
           if (node.nodeType === 3) { // text node
-            text += node.textContent;
+            const v = node.textContent;
+            if (v) { text += v; runs.push({type:'text', value:v}); }
           } else if (node.nodeName === 'IMG') {
-            text += node.getAttribute('alt') || node.getAttribute('shared-tooltip-text') || '';
+            const alt = node.getAttribute('alt') || node.getAttribute('shared-tooltip-text') || '';
+            const src = node.src || node.getAttribute('src') || '';
+            text += alt;
+            runs.push({type:'emoji', alt, src});
           } else {
-            text += node.textContent;
+            const v = node.textContent;
+            if (v) { text += v; runs.push({type:'text', value:v}); }
           }
         });
         text = text.trim();
@@ -336,8 +342,10 @@ async function injectChatObserver(page) {
         id,
         author,
         text,
+        runs,
         authorId,
         isMod,
+        isLive,
         platform: 'youtube',
         ts,
       });

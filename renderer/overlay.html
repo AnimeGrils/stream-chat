@@ -132,8 +132,15 @@ evtSource.onmessage = e => {
 
 function addMsg(msg) {
   const el = buildEl(msg);
-  msgs.push({ id: msg.id, el });
-  area.appendChild(el);
+  const ts = msg.ts || 0;
+  // Binary search for timestamp-ordered insertion point
+  let lo = 0, hi = msgs.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (msgs[mid].ts <= ts) lo = mid + 1; else hi = mid;
+  }
+  msgs.splice(lo, 0, { id: msg.id, ts, el });
+  area.insertBefore(el, msgs[lo + 1]?.el || null);
   while (msgs.length > MAX) {
     const old = msgs.shift();
     old.el.remove();

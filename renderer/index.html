@@ -710,6 +710,7 @@ let pingMessageIds=new Set(); // mod pings to streamer — bypass delay + highli
 const msgMap=new Map(); // id -> msg object for profile lookup
 const sessionActions={}; // userId -> {timeouts:n, bans:n}
 let ytChatId=null, ytNextPage=null;
+let ytHistoricalTimer=null;
 let sendPlatform='twitch';
 let replyToMsg=null; // message being replied to
 
@@ -1136,8 +1137,24 @@ if(window.electronAPI){
     msg.emotesTag='';
     msg.platform='youtube';
     if(msg.author) msg.author=msg.author.replace(/^@+/,'');
+    // Collect new YouTube emoji into the picker
+    if(msg.runs){
+      let newYtEmote=false;
+      msg.runs.forEach(seg=>{
+        if(seg.type==='emoji'&&seg.src&&seg.alt&&!allEmotes.some(e=>e.source==='yt'&&e.name===seg.alt)){
+          allEmotes.push({name:seg.alt,url:seg.src,source:'yt'});
+          newYtEmote=true;
+        }
+      });
+      if(newYtEmote&&el('emotePicker').classList.contains('open')) renderEmoteGrid();
+    }
     addMsg(msg);
-    // Also write to Firebase bridge if we're the leader
+    // Historical messages are held back from the overlay until the batch finishes,
+    // then we do a clean timestamp-ordered replay of everything.
+    if(msg.isLive===false){
+      clearTimeout(ytHistoricalTimer);
+      ytHistoricalTimer=setTimeout(replayOverlay, 600);
+    }
   });
   window.electronAPI.onYoutubeDeleted(id=>{
     if(deletedIds.has(fbKey(id))) return;
@@ -1238,7 +1255,7 @@ function setPlatform(p){
   cls('pt-tw','pt-btn'+(p==='twitch'?' tw-active':''));
   cls('pt-yt','pt-btn'+(p==='youtube'?' yt-active':''));
   updateSendUI();
-  closeEmotePicker();
+  if(el('emotePicker').classList.contains('open')) renderEmoteGrid();
 }
 
 function onInputKey(e){
@@ -1461,7 +1478,7 @@ function renderEmoteGrid(){
     grid.innerHTML=`<div class="emote-loading">${ytMode&&!query?'No YouTube emotes loaded yet':'No emotes found'}</div>`; return;
   }
   grid.innerHTML='';
-  const sections=[{key:'tw',label:'Twitch'},{key:'7tv',label:'7TV'},{key:'bttv',label:'BTTV'},{key:'yt',label:'YouTube'}];
+  const sections=[{key:'tw',label:'Twitch'},{key:'yt',label:'YouTube'},{key:'7tv',label:'7TV'},{key:'bttv',label:'BTTV'}];
   sections.forEach(({key,label})=>{
     const group=filtered.filter(e=>e.source===key).slice(0,200);
     if(!group.length) return;
@@ -1722,7 +1739,7 @@ function addMsg(msg){
   if(msg.platform==='twitch'&&msg.author) twUserList.set(msg.author.toLowerCase(),msg.author);
   if(msg.platform==='youtube'&&msg.author) ytUserList.set(msg.author.toLowerCase(),msg.author);
   // Push to overlay after delay — setTimeout fires even when window is minimized
-  if(window.electronAPI?.overlayMsg&&msg.platform!=='system'){
+  if(window.electronAPI?.overlayMsg&&msg.platform!=='system'&&msg.isLive!==false){
     const d=(ownMessageIds.has(msg.id)||pingMessageIds.has(msg.id))?0:DELAY;
     setTimeout(()=>{
       if(deletedIds.has(fbKey(msg.id))||overlayShownIds.has(msg.id)) return;
@@ -1730,7 +1747,7 @@ function addMsg(msg){
       const badgeUrls=msg.badgesTag&&msg.platform==='twitch'
         ?msg.badgesTag.split(',').map(b=>{const[s,v]=b.split('/');return resolveBadge(s,v);}).filter(Boolean)
         :[];
-      window.electronAPI.overlayMsg({type:'add',msg:{...msg,badgeUrls,segments:buildOverlaySegments(msg.text||'',msg.emotesTag||'')}});
+      window.electronAPI.overlayMsg({type:'add',msg:{...msg,badgeUrls,segments:buildOverlaySegments(msg.text||'',msg.emotesTag||'',msg.runs)}});
     },d);
   }
   renderMessages();
@@ -1739,7 +1756,27 @@ function addMsg(msg){
 // ═══════ OVERLAY SEGMENTS ═══════
 // Pre-resolves text + Twitch emotes + 7TV emotes into a flat segment array
 // so the overlay doesn't need to do any matching itself.
-function buildOverlaySegments(text,emotesTag){
+function buildOverlaySegments(text,emotesTag,runs){
+  // YouTube messages: use runs for emoji, then check 7TV/BTTV on text
+  if(runs&&runs.length){
+    const segs=[];
+    runs.forEach(seg=>{
+      if(seg.type==='emoji'){
+        const url=safeUrl(seg.src);
+        if(url) segs.push({type:'emote',url,name:seg.alt});
+        else if(seg.alt) segs.push({type:'text',value:seg.alt});
+      } else {
+        seg.value.split(' ').forEach((word,i)=>{
+          if(i>0) segs.push({type:'text',value:' '});
+          const stv=sevenTVEmoteMap.get(word)||bttvEmoteMap.get(word);
+          if(stv) segs.push({type:'emote',url:stv.url,name:word});
+          else segs.push({type:'text',value:word});
+        });
+      }
+    });
+    return segs;
+  }
+  // Twitch messages: use emote tag ranges + 7TV/BTTV word matching
   const ranges=[];
   if(emotesTag){
     emotesTag.split('/').forEach(e=>{
@@ -1771,6 +1808,23 @@ function buildOverlaySegments(text,emotesTag){
   });
   if(cursor<chars.length) pushText(chars.slice(cursor).join(''));
   return segs;
+}
+
+function replayOverlay(){
+  ytHistoricalTimer=null;
+  if(!window.electronAPI?.overlayMsg) return;
+  window.electronAPI.overlayMsg({type:'clear'});
+  overlayShownIds.clear();
+  [...messages]
+    .filter(m=>m.platform!=='system'&&!deletedIds.has(fbKey(m.id)))
+    .sort((a,b)=>a.ts-b.ts)
+    .forEach(m=>{
+      overlayShownIds.add(m.id);
+      const badgeUrls=m.badgesTag&&m.platform==='twitch'
+        ?m.badgesTag.split(',').map(b=>{const[s,v]=b.split('/');return resolveBadge(s,v);}).filter(Boolean)
+        :[];
+      window.electronAPI.overlayMsg({type:'add',msg:{...m,badgeUrls,segments:buildOverlaySegments(m.text||'',m.emotesTag||'',m.runs)}});
+    });
 }
 
 // ═══════ EMOTE RENDERING ═══════
@@ -1818,6 +1872,28 @@ function renderMsgText(text, emotesTag){
     if(seg.type!=='text') return `<img class="emote" src="${safeUrl(seg.url)}" alt="${esc(seg.name)}" title="${esc(seg.name)}">`;
     return linkify(seg.value);
   }).join('');
+}
+
+function renderYtText(text, runs){
+  if(!runs||!runs.length) return linkify(text);
+  const parts=[];
+  runs.forEach(seg=>{
+    if(seg.type==='emoji'){
+      const url=safeUrl(seg.src);
+      if(url) parts.push(`<img class="emote yt-emoji" src="${url}" alt="${esc(seg.alt)}" title="${esc(seg.alt)}">`);
+      else parts.push(esc(seg.alt)); // Unicode emoji or text fallback
+    } else {
+      // Check each word against 7TV/BTTV
+      const words=seg.value.split(' ');
+      words.forEach((word,i)=>{
+        if(i>0) parts.push(' ');
+        const stv=sevenTVEmoteMap.get(word)||bttvEmoteMap.get(word);
+        if(stv) parts.push(`<img class="emote" src="${safeUrl(stv.url)}" alt="${esc(word)}" title="${esc(word)}">`);
+        else parts.push(linkify(word));
+      });
+    }
+  });
+  return parts.join('');
 }
 
 // ═══════ RENDER ═══════
@@ -1880,7 +1956,7 @@ function buildMsg(msg){
   const isDel=deletedIds.has(fbKey(msg.id));
   const delBy=isDel?deletedIds.get(fbKey(msg.id)):null;
   const isMod=mode==='mod';
-  const renderedText=renderMsgText(msg.text,msg.emotesTag||'');
+  const renderedText=msg.platform==='youtube'?renderYtText(msg.text,msg.runs):renderMsgText(msg.text,msg.emotesTag||'');
   const badgesHtml = buildBadgeImgs(msg);
   const replyBar = msg.replyParentId ? `<div class="msg-reply-bar" data-scrollto="${esc(msg.replyParentId)}"><span class="msg-reply-author">@${esc(msg.replyParentUser||'?')}</span><span class="msg-reply-text">${esc((msg.replyParentText||'').replace(/\\\\s/g,' ').slice(0,80))}</span></div>` : '';
   const announceTag = isAnnounce ? `<span class="announce-tag" style="background:${msg.announcementColor}22;color:${msg.announcementColor};border:1px solid ${msg.announcementColor}44">📣</span>` : '';
@@ -3295,6 +3371,7 @@ function resetSession(){
   if(window.electronAPI?.overlayMsg) window.electronAPI.overlayMsg({type:'clear'});
   twToken=null; twUserId=null; twBroadcasterId=null; twDisplayName=null; twBcToken=null;
   ytToken=null; ytDisplayName=null; ytChatId=null; ytNextPage=null;
+  clearTimeout(ytHistoricalTimer); ytHistoricalTimer=null;
   pingMessageIds=new Set(); twUserList.clear(); ytUserList.clear();
   el('tw-username').className='auth-username'; el('tw-username').textContent='';
   el('auth-yt-btn').className='auth-btn auth-yt'; el('auth-yt-btn').textContent='Connect YouTube';
