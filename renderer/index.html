@@ -279,6 +279,24 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
 .profile-panel{position:fixed;top:0;right:-420px;width:380px;height:100vh;background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column;z-index:500;transition:right .25s cubic-bezier(.4,0,.2,1);overflow:hidden}
 .profile-panel.open{right:0}
 .profile-panel.open.shift{right:260px}
+/* Poll widget */
+#pollWidget{display:none;background:var(--surface);border:1px solid var(--twitch-dim);border-radius:8px;margin:4px 8px 0;padding:10px 12px;flex-shrink:0}
+.pw-header{display:flex;align-items:center;gap:6px;margin-bottom:8px}
+.pw-label{font-size:10px;font-weight:700;letter-spacing:.06em;color:var(--twitch);text-transform:uppercase;flex-shrink:0}
+.pw-title{font-size:12px;font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pw-timer{font-size:11px;color:var(--amber);font-family:var(--mono);flex-shrink:0}
+.pw-dismiss{background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px;padding:0 2px;flex-shrink:0}
+.pw-dismiss:hover{color:var(--text)}
+.pw-choice{margin-bottom:5px;padding:5px 8px;border-radius:5px;border:1px solid var(--border);transition:border-color .15s,background .15s}
+.pw-choice.pw-winner{border-color:var(--twitch);background:rgba(145,70,255,.1)}
+.pw-choice-row{display:flex;align-items:center;gap:6px;margin-bottom:3px}
+.pw-num{font-size:11px;font-weight:700;color:var(--muted);min-width:14px;flex-shrink:0}
+.pw-text{font-size:12px;flex:1}
+.pw-stat{font-size:11px;color:var(--muted);font-family:var(--mono);flex-shrink:0}
+.pw-bar-bg{height:3px;background:var(--surface3);border-radius:2px}
+.pw-bar{height:3px;background:var(--twitch-dim);border-radius:2px;transition:width .4s}
+.pw-choice.pw-winner .pw-bar{background:var(--twitch)}
+.pw-footer{margin-top:6px;font-size:11px;color:var(--muted);text-align:center}
 .chatters-panel{position:fixed;top:0;right:-290px;width:260px;height:100vh;background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column;z-index:501;transition:right .25s cubic-bezier(.4,0,.2,1);overflow:hidden}
 .chatters-panel.open{right:0}
 body.chatters-open .profile-panel:not(.open){right:-120px}
@@ -459,6 +477,16 @@ body.chatters-open .profile-panel:not(.open){right:-120px}
   <div id="bn-fbw"   class="banner bn-err"  style="display:none">Firebase not connected — deletions won't sync across devices.</div>
   <div id="bn-err"   class="banner bn-err"  style="display:none"></div>
 
+  <div id="pollWidget">
+    <div class="pw-header">
+      <span class="pw-label">Poll</span>
+      <span class="pw-title" id="pwTitle"></span>
+      <span class="pw-timer" id="pwTimer"></span>
+      <button class="pw-dismiss" onclick="dismissPoll()" title="Dismiss">✕</button>
+    </div>
+    <div id="pwChoices"></div>
+    <div class="pw-footer" id="pwFooter"></div>
+  </div>
   <div class="chat-area" id="chatArea">
     <div class="empty" id="emptyState">
       <div style="font-size:28px;opacity:.3">💬</div>
@@ -476,6 +504,7 @@ body.chatters-open .profile-panel:not(.open){right:-120px}
       <div class="cmd-section">Broadcaster</div>
       <div class="cmd-item" onclick="openPollModal()"><span class="cmd-icon">📊</span>Create Poll</div>
       <div class="cmd-item" onclick="openManagePollModal()"><span class="cmd-icon">📋</span>Manage Poll</div>
+      <div class="cmd-item" onclick="openPollHistoryModal()"><span class="cmd-icon">📜</span>Poll History</div>
       <div class="cmd-item" onclick="openPredictionModal()"><span class="cmd-icon">🎯</span>Create Prediction</div>
       <div class="cmd-item" onclick="openManagePredictionModal()"><span class="cmd-icon">📋</span>Manage Prediction</div>
       <div class="cmd-item" onclick="openStreamInfoModal()"><span class="cmd-icon">🎬</span>Edit Stream Info</div>
@@ -590,11 +619,19 @@ function initSecretFields(){
 document.addEventListener('DOMContentLoaded', initSecretFields);
 
 function extractBcToken(e){
-  setTimeout(()=>{
+  setTimeout(async ()=>{
     const inp=el('twBcToken');
     const val=inp.value;
     const match=val.match(/[#&]?access_token=([a-zA-Z0-9]+)/);
-    if(match){ inp.value=match[1]; saveField(inp); twBcToken=match[1]; checkBroadcasterTokenScopes(); }
+    if(match){
+      inp.value=match[1]; saveField(inp); twBcToken=match[1];
+      try{
+        const r=await fetch('https://id.twitch.tv/oauth2/validate',{headers:{Authorization:'OAuth '+twBcToken}});
+        const d=await r.json();
+        if(d.user_id) twBroadcasterId=d.user_id;
+      }catch(e){}
+      checkBroadcasterTokenScopes();
+    }
   },0);
 }
 
@@ -870,6 +907,88 @@ async function onTwitchAuthed(){
   updateSendUI();
   checkTwitchScopes();
   checkBroadcasterTokenScopes();
+  startPollPolling();
+}
+// ═══════ LIVE POLL WIDGET ═══════
+let activePoll=null,pollCheckInterval=null,pollCountdownTimer=null,pollEndTimeout=null,pollDismissed=false;
+function startPollPolling(){
+  if(pollCheckInterval) return;
+  checkActivePoll();
+  pollCheckInterval=setInterval(checkActivePoll,5000);
+}
+function stopPollPolling(){
+  clearInterval(pollCheckInterval);pollCheckInterval=null;
+  clearInterval(pollCountdownTimer);pollCountdownTimer=null;
+  clearTimeout(pollEndTimeout);pollEndTimeout=null;
+  activePoll=null;pollDismissed=false;
+  el('pollWidget').style.display='none';
+}
+async function checkActivePoll(){
+  if(!twBroadcasterId||!twBcToken) return;
+  try{
+    const d=await bcFetch(`https://api.twitch.tv/helix/polls?broadcaster_id=${twBroadcasterId}&status=ACTIVE&first=1`);
+    const poll=d.data?.[0];
+    if(poll){
+      const endMs=new Date(poll.started_at).getTime()+poll.duration*1000;
+      if(endMs<Date.now()){
+        // Already expired — only show ended state if we were tracking it live this session
+        if(activePoll?.id===poll.id&&activePoll.status==='ACTIVE'){
+          activePoll={...poll,status:'ENDED'};
+          if(!pollDismissed){renderPoll(activePoll,true);if(!pollEndTimeout)pollEndTimeout=setTimeout(dismissPoll,30000);}
+        }
+        return;
+      }
+      pollDismissed=false;
+      clearTimeout(pollEndTimeout);pollEndTimeout=null;
+      activePoll=poll;
+      renderPoll(poll,false);
+    } else if(activePoll?.status==='ACTIVE'){
+      activePoll.status='ENDED';
+      try{
+        const ended=await bcFetch(`https://api.twitch.tv/helix/polls?broadcaster_id=${twBroadcasterId}&first=1`);
+        const ep=ended.data?.[0];
+        if(ep&&ep.status!=='ACTIVE'){activePoll=ep;renderPoll(ep,true);if(!pollEndTimeout)pollEndTimeout=setTimeout(dismissPoll,30000);}
+      }catch(e){}
+    }
+  }catch(e){}
+}
+function renderPoll(poll,ended){
+  if(pollDismissed) return;
+  const totalVotes=poll.choices.reduce((s,c)=>s+c.votes,0);
+  el('pwTitle').textContent=poll.title;
+  clearInterval(pollCountdownTimer);pollCountdownTimer=null;
+  const timerEl=el('pwTimer');
+  if(ended){
+    timerEl.textContent='Ended';timerEl.style.color='var(--muted)';
+  } else {
+    const endMs=new Date(poll.started_at).getTime()+poll.duration*1000;
+    const tick=()=>{
+      const rem=Math.max(0,Math.round((endMs-Date.now())/1000));
+      const m=Math.floor(rem/60),s=rem%60;
+      timerEl.textContent=m>0?`${m}m${s.toString().padStart(2,'0')}s`:`${s}s`;
+      timerEl.style.color=rem<30?'var(--del)':'var(--amber)';
+      if(rem===0){clearInterval(pollCountdownTimer);pollCountdownTimer=null;checkActivePoll();}
+    };
+    tick();pollCountdownTimer=setInterval(tick,1000);
+  }
+  const maxV=Math.max(1,...poll.choices.map(c=>c.votes));
+  let html='';
+  poll.choices.forEach((c,i)=>{
+    const pct=totalVotes?Math.round(c.votes/totalVotes*100):0;
+    const winner=ended&&c.votes===maxV&&c.votes>0;
+    html+=`<div class="pw-choice${winner?' pw-winner':''}" style="cursor:default">`
+      +`<div class="pw-choice-row"><span class="pw-num">${i+1}</span><span class="pw-text">${esc(c.title)}</span><span class="pw-stat">${c.votes} · ${pct}%</span></div>`
+      +`<div class="pw-bar-bg"><div class="pw-bar" style="width:${pct}%"></div></div></div>`;
+  });
+  el('pwChoices').innerHTML=html;
+  el('pwFooter').textContent=ended?`Final: ${totalVotes} votes`:(totalVotes?`${totalVotes} votes`:'');
+  el('pollWidget').style.display='block';
+}
+function dismissPoll(){
+  pollDismissed=true;
+  clearInterval(pollCountdownTimer);pollCountdownTimer=null;
+  clearTimeout(pollEndTimeout);pollEndTimeout=null;
+  el('pollWidget').style.display='none';
 }
 function updateSettingsWarn(){
   const any=el('tw-scope-warn').style.display!=='none'||el('bc-scope-warn').style.display!=='none';
@@ -1139,6 +1258,21 @@ async function sendMessage(){
 
 async function sendTwitch(text){
   if(!twToken){flashErr('Enter your Twitch token in Settings first.');return;}
+  // Slash commands (e.g. /vote, /me) must go through authenticated IRC — the Helix API strips them
+  if(text.startsWith('/')){
+    if(!twDisplayName){flashErr('Not logged in to Twitch.');return;}
+    const ws=new WebSocket('wss://irc-ws.chat.twitch.tv/');
+    ws.onopen=()=>{
+      ws.send(`PASS oauth:${twToken}`);
+      ws.send(`NICK ${twDisplayName.toLowerCase()}`);
+      ws.send(`JOIN #${cfg.twCh}`);
+      ws.send(`PRIVMSG #${cfg.twCh} :${text}`);
+      setTimeout(()=>{try{ws.close();}catch{}},3000);
+    };
+    ws.onerror=()=>flashErr('Twitch command failed.');
+    el('chatInput').value=''; cancelReply();
+    return;
+  }
   // If user IDs haven't loaded yet, fetch them now
   if(!twUserId||!twBroadcasterId){
     try{
@@ -2433,6 +2567,7 @@ document.addEventListener('click',e=>{if(!el('chatInputWrap').contains(e.target)
 const SLASH_COMMANDS=[
   {cmd:'/poll',       label:'Create Poll',        desc:'Start a viewer poll'},
   {cmd:'/managepoll', label:'Manage Poll',         desc:'End or archive active poll'},
+  {cmd:'/pollhistory',label:'Poll History',        desc:'View recent poll results'},
   {cmd:'/prediction', label:'Create Prediction',   desc:'Start a channel points prediction'},
   {cmd:'/managepred', label:'Manage Prediction',   desc:'Resolve or cancel active prediction'},
   {cmd:'/streaminfo', label:'Edit Stream Info',    desc:'Change title and game'},
@@ -2465,7 +2600,7 @@ function commitCommandAc(cmd){
   el('chatInput').value='';
   closeAc();
   const actions={
-    '/poll':openPollModal,'/managepoll':openManagePollModal,
+    '/poll':openPollModal,'/managepoll':openManagePollModal,'/pollhistory':openPollHistoryModal,
     '/prediction':openPredictionModal,'/managepred':openManagePredictionModal,
     '/streaminfo':openStreamInfoModal,'/raid':openRaidModal,'/announce':openAnnouncementModal,
     '/shoutout':()=>openShoutoutModal(),'/chatmodes':openChatModesModal,
@@ -2551,9 +2686,10 @@ async function openManagePollModal(){
   document.querySelector('.modal-cancel').textContent='Close';
   el('modalOverlay').classList.add('open');
   try{
-    const r=await bcFetch(`https://api.twitch.tv/helix/polls?broadcaster_id=${twBroadcasterId}&status=ACTIVE&first=1`);
+    const r=await bcFetch(`https://api.twitch.tv/helix/polls?broadcaster_id=${twBroadcasterId}&first=1`);
     const poll=r?.data?.[0];
-    if(!poll){el('modalSub').textContent='No active poll.';el('modalBody').innerHTML='<div class="pp-loading">No poll is currently running.</div>';return;}
+    if(!poll){el('modalSub').textContent='No polls found.';el('modalBody').innerHTML='<div class="pp-loading">No poll history available.</div>';return;}
+    const isActive=poll.status==='ACTIVE';
     const totalVotes=poll.choices.reduce((a,c)=>a+c.votes,0);
     el('modalSub').textContent=esc(poll.title);
     el('modalBody').innerHTML=`
@@ -2563,10 +2699,10 @@ async function openManagePollModal(){
           <div style="background:var(--surface2);border-radius:3px;height:4px"><div style="background:var(--twitch);border-radius:3px;height:4px;width:${totalVotes?Math.round(c.votes/totalVotes*100):0}%"></div></div>
         </div>`).join('')}
       </div>
-      <div style="display:flex;gap:8px">
+      ${isActive?`<div style="display:flex;gap:8px">
         <button class="modal-confirm to" style="flex:1" onclick="doEndPoll('${esc(poll.id)}','TERMINATED')">End Now</button>
         <button class="modal-confirm" style="flex:1;background:var(--surface3);border:1px solid var(--border);color:var(--muted)" onclick="doEndPoll('${esc(poll.id)}','ARCHIVED')">Archive</button>
-      </div>`;
+      </div>`:`<div style="text-align:center;font-size:12px;color:var(--muted)">Poll ended · ${totalVotes} total votes</div>`}`;
   }catch(e){el('modalSub').textContent='Failed to load poll.';el('modalBody').innerHTML=`<div class="pp-loading">${esc(e.message)}</div>`;}
 }
 
@@ -2576,6 +2712,54 @@ async function doEndPoll(pollId,status){
     flashSuccess(status==='TERMINATED'?'Poll ended':'Poll archived');
     closeModal();
   }catch(e){flashErr('Failed to end poll: '+e.message);}
+}
+
+async function openPollHistoryModal(){
+  closeCmdDropdown();
+  if(!twBcToken){flashErr('Add a broadcaster token in Settings to view poll history.');return;}
+  modalAction={type:'poll-history'};
+  el('modalTitle').textContent='Poll History';
+  el('modalSub').textContent='Loading…';
+  el('modalBody').innerHTML='<div class="pp-loading">Fetching recent polls…</div>';
+  el('modalConfirmBtn').style.display='none';
+  document.querySelector('.modal-cancel').textContent='Close';
+  el('modalOverlay').classList.add('open');
+  try{
+    const r=await bcFetch(`https://api.twitch.tv/helix/polls?broadcaster_id=${twBroadcasterId}&first=20`);
+    const polls=r?.data||[];
+    if(!polls.length){el('modalSub').textContent='No polls found.';el('modalBody').innerHTML='<div class="pp-loading">No poll history available.</div>';return;}
+    el('modalSub').textContent=`${polls.length} recent poll${polls.length===1?'':'s'}`;
+    const statusColor={ACTIVE:'var(--twitch)',COMPLETED:'var(--online)',TERMINATED:'var(--amber)',ARCHIVED:'var(--muted)'};
+    const statusLabel={ACTIVE:'Live',COMPLETED:'Ended',TERMINATED:'Ended early',ARCHIVED:'Archived'};
+    const fmt=d=>{const dt=new Date(d);return dt.toLocaleDateString(undefined,{month:'short',day:'numeric'})+' '+dt.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'});};
+    let html='<div style="display:flex;flex-direction:column;gap:10px;max-height:340px;overflow-y:auto;padding-right:2px">';
+    polls.forEach(poll=>{
+      const total=poll.choices.reduce((s,c)=>s+c.votes,0);
+      const maxV=Math.max(1,...poll.choices.map(c=>c.votes));
+      const isActive=poll.status==='ACTIVE';
+      html+=`<div style="border:1px solid var(--border);border-radius:7px;padding:9px 11px;background:var(--surface2)">`;
+      html+=`<div style="display:flex;align-items:center;gap:7px;margin-bottom:7px">`;
+      html+=`<span style="font-size:12px;font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(poll.title)}</span>`;
+      html+=`<span style="font-size:10px;font-weight:700;color:${statusColor[poll.status]||'var(--muted)'};flex-shrink:0">${statusLabel[poll.status]||poll.status}</span>`;
+      html+=`</div>`;
+      poll.choices.forEach(c=>{
+        const pct=total?Math.round(c.votes/total*100):0;
+        const winner=!isActive&&c.votes===maxV&&c.votes>0;
+        html+=`<div style="margin-bottom:5px">`;
+        html+=`<div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:2px">`;
+        html+=`<span style="${winner?'font-weight:600;color:var(--twitch)':''}">${esc(c.title)}</span>`;
+        html+=`<span style="color:var(--muted)">${c.votes} · ${pct}%</span></div>`;
+        html+=`<div style="background:var(--surface3);border-radius:2px;height:3px"><div style="background:${winner?'var(--twitch)':'var(--twitch-dim)'};border-radius:2px;height:3px;width:${pct}%"></div></div>`;
+        html+=`</div>`;
+      });
+      html+=`<div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px">`;
+      html+=`<span style="font-size:11px;color:var(--muted)">${fmt(poll.started_at)} · ${total} vote${total===1?'':'s'}</span>`;
+      if(isActive) html+=`<div style="display:flex;gap:6px"><button class="modal-confirm to" style="padding:3px 10px;font-size:11px" onclick="doEndPoll('${esc(poll.id)}','TERMINATED')">End</button><button class="modal-confirm" style="padding:3px 10px;font-size:11px;background:var(--surface3);border:1px solid var(--border);color:var(--muted)" onclick="doEndPoll('${esc(poll.id)}','ARCHIVED')">Archive</button></div>`;
+      html+=`</div></div>`;
+    });
+    html+='</div>';
+    el('modalBody').innerHTML=html;
+  }catch(e){el('modalSub').textContent='Failed to load history.';el('modalBody').innerHTML=`<div class="pp-loading">${esc(e.message)}</div>`;}
 }
 
 async function createPoll(){
@@ -3076,6 +3260,7 @@ function goToSettings(){
 
 function resetSession(){
   // Full teardown — called only when config actually changes
+  stopPollPolling();
   if(twitchWs){try{twitchWs.close();}catch{} twitchWs=null;}
   if(window.electronAPI) window.electronAPI.closeYoutubeChat();
   sessionStorage.clear();
