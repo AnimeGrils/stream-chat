@@ -107,6 +107,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
 .msg-body{flex:1;min-width:0;word-break:break-word}
 .msg-author{font-weight:700;margin-right:4px;cursor:pointer}.msg-author:hover{text-decoration:underline}
 .msg-sep{color:var(--muted);margin-right:4px;font-weight:400}
+.msg-system{opacity:.85}.msg-system .msg-body{color:var(--muted);font-style:italic;font-size:11.5px}
 .msg-text{color:rgba(232,232,240,.82)}
 .emote{height:24px;width:auto;vertical-align:middle;margin:0 1px}
 .msg-actions{flex-shrink:0;opacity:0;transition:opacity .1s;display:flex;gap:4px}
@@ -387,10 +388,10 @@ body.chatters-open .profile-panel:not(.open){right:-120px}
   <div class="sec"><span class="badge b-tw">Twitch</span></div>
   <div class="field"><label>Channel Name</label><input id="twChannel" oninput="saveField(this)" placeholder="channel_name"></div>
   <div class="field field-secret"><label>Client ID</label><input id="twClientId2" type="password" oninput="saveField(this)" placeholder="From dev.twitch.tv/console/apps"><button type="button" class="eye-btn" onclick="toggleSecret(this)" title="Show/hide"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+  <div class="field field-secret"><label>Twitch Token</label><input id="twClientId" type="password" oninput="saveField(this)" onpaste="extractTwitchToken(event)" placeholder="Click below to generate, or paste manually"><button type="button" class="eye-btn" onclick="toggleSecret(this)" title="Show/hide"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
   <div class="field" style="margin-top:-4px">
     <button class="btn" style="width:100%;background:var(--twitch);color:#fff;font-size:12px;padding:7px 0" onclick="getTwitchToken()">Get Twitch Token</button>
   </div>
-  <div class="field field-secret"><label>Twitch Token</label><input id="twClientId" type="password" oninput="saveField(this)" onpaste="extractTwitchToken(event)" placeholder="Click above to generate, or paste manually"><button type="button" class="eye-btn" onclick="toggleSecret(this)" title="Show/hide"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
   <div id="tw-scope-warn" style="display:none;font-size:11px;color:var(--amber);background:rgba(255,170,68,.1);border:1px solid rgba(255,170,68,.3);border-radius:5px;padding:7px 10px;margin-top:-2px;line-height:1.5">⚠ Token is missing permissions. Click <b>Get Twitch Token</b> above to re-auth.<br><span id="tw-scope-missing" style="color:var(--muted)"></span></div>
   <div class="field field-secret" style="margin-top:8px"><label>Broadcaster Token <span class="b-opt">polls · predictions · stream info</span></label><input id="twBcToken" type="password" oninput="saveField(this)" onpaste="extractBcToken(event)" placeholder="Optional — click below to generate"><button type="button" class="eye-btn" onclick="toggleSecret(this)" title="Show/hide"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
   <div class="field" style="margin-top:-4px">
@@ -1022,6 +1023,11 @@ async function checkBroadcasterTokenScopes(){
   }catch(e){}
   updateSettingsWarn();
 }
+function fmtDur(s){
+  if(s>=3600){const h=Math.floor(s/3600),m=Math.floor((s%3600)/60);return m>0?`${h}h ${m}m`:`${h}h`;}
+  if(s>=60){const m=Math.floor(s/60),r=s%60;return r>0?`${m}m ${r}s`:`${m}m`;}
+  return `${s}s`;
+}
 async function twFetch(url,opts={}){
   const r=await fetch(url,{...opts,headers:{'Authorization':`Bearer ${twToken}`,'Client-Id':cfg.twCid||'',...(opts.headers||{})}});
   if(!r.ok){const j=await r.json().catch(()=>({}));throw new Error(j.message||r.status);}
@@ -1129,6 +1135,7 @@ if(window.electronAPI){
     msg.color='#ff5555';
     msg.emotesTag='';
     msg.platform='youtube';
+    if(msg.author) msg.author=msg.author.replace(/^@+/,'');
     addMsg(msg);
     // Also write to Firebase bridge if we're the leader
   });
@@ -1695,8 +1702,10 @@ function parseClearChat(line){
   }
   messages.filter(m=>m.platform==='twitch'&&m.author.toLowerCase()===user).forEach(m=>syncDelete(m.id));
   // Find the display name (mixed case) for button refresh
-  const displayName=(messages.find(m=>m.platform==='twitch'&&m.author.toLowerCase()===user)||{}).author;
+  const displayName=(messages.find(m=>m.platform==='twitch'&&m.author.toLowerCase()===user)||{}).author||user;
   if(displayName) setTimeout(()=>refreshModButtons(displayName),0);
+  const text=dur>0?`${displayName} was timed out for ${fmtDur(dur)}`:`${displayName} was permanently banned`;
+  addMsg({id:'sys_'+Date.now()+'_'+Math.random().toString(36).slice(2),platform:'system',text,ts:Date.now()});
 }
 
 // ═══════ YOUTUBE ═══════
@@ -1713,7 +1722,7 @@ function addMsg(msg){
   if(msg.platform==='twitch'&&msg.author) twUserList.set(msg.author.toLowerCase(),msg.author);
   if(msg.platform==='youtube'&&msg.author) ytUserList.set(msg.author.toLowerCase(),msg.author);
   // Push to overlay after delay — setTimeout fires even when window is minimized
-  if(window.electronAPI?.overlayMsg){
+  if(window.electronAPI?.overlayMsg&&msg.platform!=='system'){
     const d=(ownMessageIds.has(msg.id)||pingMessageIds.has(msg.id))?0:DELAY;
     setTimeout(()=>{
       if(deletedIds.has(fbKey(msg.id))||overlayShownIds.has(msg.id)) return;
@@ -1815,7 +1824,7 @@ function renderMsgText(text, emotesTag){
 function renderMessages(){
   const area=document.getElementById('chatArea');
   const now=Date.now(),s=mode==='streamer';
-  const toShow=s?messages.filter(m=>!deletedIds.has(fbKey(m.id))&&(ownMessageIds.has(m.id)||pingMessageIds.has(m.id)||now-m.ts>=DELAY)):messages.filter(m=>!deletedIds.has(fbKey(m.id))||mode==='mod');
+  const toShow=s?messages.filter(m=>!deletedIds.has(fbKey(m.id))&&(m.platform==='system'||ownMessageIds.has(m.id)||pingMessageIds.has(m.id)||now-m.ts>=DELAY)):messages.filter(m=>!deletedIds.has(fbKey(m.id))||mode==='mod');
   el('emptyState').style.display=toShow.length===0?'flex':'none';
   const showSet=new Set(toShow.map(m=>m.id));
   // Remove/update nodes that shouldn't be shown
@@ -1853,6 +1862,14 @@ function renderMessages(){
 
 function buildMsg(msg){
   const div=document.createElement('div');
+  if(msg.platform==='system'){
+    const t=new Date(msg.ts);
+    const time=t.getHours().toString().padStart(2,'0')+':'+t.getMinutes().toString().padStart(2,'0');
+    div.className='msg msg-system';
+    div.dataset.id=msg.id;
+    div.innerHTML=`<span class="msg-time">${time}</span><div class="msg-body">${esc(msg.text)}</div>`;
+    return div;
+  }
   const isPing=pingMessageIds.has(msg.id);
   const isAnnounce=!!msg.isAnnouncement;
   div.className='msg '+(msg.platform==='twitch'?'tw':'yt')+(isPing?' msg-ping':'')+(isAnnounce?' msg-announcement':'');
@@ -2519,6 +2536,11 @@ el('modalOverlay').addEventListener('click',e=>{if(e.target===el('modalOverlay')
 
 // ═══════ REPLY ═══════
 function startReply(msg){
+  // Clear old YouTube prefill if still present before switching to new reply
+  if(replyToMsg && replyToMsg.platform==='youtube'){
+    const inp=el('chatInput');
+    if(inp.value==='@'+replyToMsg.author+' ') inp.value='';
+  }
   replyToMsg = msg;
   const preview = msg.text.length>50 ? msg.text.slice(0,50)+'…' : msg.text;
   el('replyIndicatorText').textContent = 'Replying to @'+msg.author+': '+preview;
