@@ -1133,7 +1133,12 @@ if(window.electronAPI){
     // Also write to Firebase bridge if we're the leader
   });
   window.electronAPI.onYoutubeDeleted(id=>{
-    if(!deletedIds.get(fbKey(id))) syncDelete(id, null);
+    if(deletedIds.has(fbKey(id))) return;
+    deletedIds.set(fbKey(id), null);
+    renderMessages();
+    setTimeout(()=>{
+      if(fbRef && !deletedIds.get(fbKey(id))) fbRef.child(fbKey(id)).set(true).catch(()=>{});
+    }, 2000);
   });
   window.electronAPI.onYoutubeStatus(({status,detail})=>{
     if(status==='connected') dot('d-yt','ok');
@@ -1674,7 +1679,7 @@ function parseTwitchUserNotice(line){
     isAnnouncement:true,announcementColor:announceColor});
 }
 
-function parseClearMsg(line){const id=parseTags(line)['target-msg-id'];if(!id||deletedIds.get(fbKey(id)))return;syncDelete(id);}
+function parseClearMsg(line){const tags=parseTags(line);const id=tags['target-msg-id'];if(!id||deletedIds.get(fbKey(id)))return;syncDelete(id,tags['login']||null);}
 function parseClearChat(line){
   const tags=parseTags(line);
   const parts=line.trim().split(' ');
