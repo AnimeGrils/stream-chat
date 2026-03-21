@@ -5,6 +5,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // ── Utilities ────────────────────────────────────────────────────
   openExternal: (url) => ipcRenderer.invoke('open:external', url),
 
+  // ── Window state ─────────────────────────────────────────────────
+  getWindowState: () => ipcRenderer.invoke('windowState:get'),
+  setWindowState: (data) => ipcRenderer.invoke('windowState:set', data),
+
   // ── Updates ──────────────────────────────────────────────────────
   checkForUpdates: () => ipcRenderer.invoke('update:check'),
   downloadUpdate: () => ipcRenderer.invoke('update:download'),
@@ -68,8 +72,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.removeAllListeners('yt:message');
     ipcRenderer.removeAllListeners('yt:status');
     ipcRenderer.removeAllListeners('yt:deleted');
+    ipcRenderer.removeAllListeners('se:alert');
+    ipcRenderer.removeAllListeners('se:channelId');
   },
 
   // ── Overlay ───────────────────────────────────────────────────────
   overlayMsg: (data) => ipcRenderer.send('overlay:msg', data),
+
+  // ── Streamlabs ────────────────────────────────────────────────────
+  connectSE: (jwt) => ipcRenderer.invoke('se:connect', jwt),
+  disconnectSE: () => ipcRenderer.invoke('se:disconnect'),
+  onSEAlert: (cb) => ipcRenderer.on('se:alert', (_, data) => cb(data)),
+  onSEChannelId: (cb) => ipcRenderer.on('se:channelId', (_, id) => cb(id)),
 });

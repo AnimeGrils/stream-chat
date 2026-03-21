@@ -45,7 +45,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
 .btn-mod{background:var(--surface3);color:var(--text);border:1px solid var(--border)}.btn-mod:hover{background:var(--surface2)}
 
 /* ── APP ── */
-#app{display:none;flex-direction:column;height:100vh;overflow:hidden}
+#app{display:none;flex-direction:column;height:100vh;overflow:hidden;padding-right:var(--panel-offset,0px);box-sizing:border-box;transition:padding-right .25s cubic-bezier(.4,0,.2,1)}
 .topbar{display:flex;align-items:center;gap:10px;padding:9px 14px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0}
 .mode-pill{display:flex;gap:1px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:2px}
 .mode-btn{padding:5px 13px;border-radius:4px;font-size:12px;font-weight:600;cursor:pointer;border:none;background:transparent;color:var(--muted);font-family:var(--font);letter-spacing:.04em;transition:all .15s}
@@ -277,9 +277,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
 .manage-outcome .oc-stats{font-size:11px;color:var(--muted);margin-top:2px}
 
 /* ── PROFILE PANEL ── */
-.profile-panel{position:fixed;top:0;right:-420px;width:380px;height:100vh;background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column;z-index:500;transition:right .25s cubic-bezier(.4,0,.2,1);overflow:hidden}
+.profile-panel{position:fixed;top:0;right:calc(-1 * var(--profile-w,380px));width:var(--profile-w,380px);height:100vh;background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column;z-index:500;transition:right .25s cubic-bezier(.4,0,.2,1);overflow:hidden}
 .profile-panel.open{right:0}
-.profile-panel.open.shift{right:260px}
+.profile-panel.open.shift{right:var(--chatters-w,260px)}
 /* Poll widget */
 #pollWidget{display:none;background:var(--surface);border:1px solid var(--twitch-dim);border-radius:8px;margin:4px 8px 0;padding:10px 12px;flex-shrink:0}
 .pw-header{display:flex;align-items:center;gap:6px;margin-bottom:8px}
@@ -298,9 +298,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
 .pw-bar{height:3px;background:var(--twitch-dim);border-radius:2px;transition:width .4s}
 .pw-choice.pw-winner .pw-bar{background:var(--twitch)}
 .pw-footer{margin-top:6px;font-size:11px;color:var(--muted);text-align:center}
-.chatters-panel{position:fixed;top:0;right:-290px;width:260px;height:100vh;background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column;z-index:501;transition:right .25s cubic-bezier(.4,0,.2,1);overflow:hidden}
+.chatters-panel{position:fixed;top:0;right:calc(-1 * var(--chatters-w,260px));width:var(--chatters-w,260px);height:100vh;background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column;z-index:501;transition:right .25s cubic-bezier(.4,0,.2,1);overflow:hidden}
 .chatters-panel.open{right:0}
-body.chatters-open .profile-panel:not(.open){right:-120px}
 .cp-header{display:flex;align-items:center;gap:8px;padding:14px 16px;border-bottom:1px solid var(--border);flex-shrink:0}
 .cp-title{font-size:13px;font-weight:600;flex:1}
 .cp-count{font-size:11px;color:var(--muted)}
@@ -371,6 +370,36 @@ body.chatters-open .profile-panel:not(.open){right:-120px}
 .ml{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:3px 9px;border-radius:4px}
 .ml.s{background:rgba(145,70,255,.15);color:var(--twitch)}
 .ml.m{background:rgba(255,68,68,.15);color:var(--youtube)}
+
+/* ── ALERTS PANEL ── */
+.alert-badge{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--del);vertical-align:middle;margin-left:3px}
+.alerts-panel{position:fixed;top:0;right:calc(-1 * var(--alerts-w,360px));width:var(--alerts-w,360px);height:100vh;background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column;z-index:502;transition:right .25s cubic-bezier(.4,0,.2,1);overflow:hidden}
+.alerts-panel.open{right:0}
+body.alerts-open .chatters-panel.open{right:var(--alerts-w,360px)}
+body.alerts-open .profile-panel.open:not(.shift){right:var(--alerts-w,360px)}
+body.alerts-open .profile-panel.open.shift{right:calc(var(--alerts-w,360px) + var(--chatters-w,260px))}
+.panel-resizer{position:absolute;top:0;left:0;bottom:0;width:5px;cursor:ew-resize;z-index:10;transition:background .15s}
+.panel-resizer:hover,.panel-resizer.active{background:var(--twitch);opacity:.5}
+.ap-header{display:flex;align-items:center;gap:8px;padding:14px 16px;border-bottom:1px solid var(--border);flex-shrink:0}
+.ap-title{font-size:13px;font-weight:600;flex:1}
+.ap-close{background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:14px;padding:3px 5px;border-radius:4px;line-height:1;font-family:var(--font)}.ap-close:hover{color:var(--text);background:var(--surface2)}
+.ap-body{flex:1;overflow-y:auto}.ap-body::-webkit-scrollbar{width:4px}.ap-body::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.alert-item{display:flex;align-items:flex-start;gap:10px;padding:7px 14px;font-size:13px;line-height:1.5;border-left:3px solid transparent;transition:background .1s;border-bottom:1px solid rgba(255,255,255,.03)}
+.alert-item:hover{background:var(--surface2)}
+.alert-item.follow{border-left-color:var(--green)}
+.alert-item.sub,.alert-item.resub{border-left-color:var(--twitch)}
+.alert-item.gift_sub,.alert-item.mystery_gift{border-left-color:#ff9800}
+.alert-item.raid{border-left-color:var(--amber)}
+.alert-item.redeem{border-left-color:#00bcd4}
+.alert-item.tip{border-left-color:#4caf50}
+.alert-item.cheer{border-left-color:#ffd700}
+.alert-item.host{border-left-color:var(--muted)}
+.alert-icon{font-size:16px;flex-shrink:0;margin-top:1px}
+.alert-body{flex:1;min-width:0;word-break:break-word}
+.alert-title{font-size:13px}
+.alert-msg{font-size:12px;color:var(--muted);margin-top:2px}
+.alert-time{font-size:10px;color:var(--muted);font-family:var(--mono);flex-shrink:0;margin-top:3px}
+.alerts-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:10px;color:var(--muted);padding:40px 0}
 </style>
 </head>
 <body>
@@ -400,22 +429,22 @@ body.chatters-open .profile-panel:not(.open){right:-120px}
     <div id="bc-scope-warn" style="display:none;font-size:11px;color:var(--amber);background:rgba(255,170,68,.1);border:1px solid rgba(255,170,68,.3);border-radius:5px;padding:7px 10px;margin-top:6px;line-height:1.5">⚠ Broadcaster token is missing permissions. If you are a mod, ask the broadcaster to click <b>Get Broadcaster Token</b> and share the updated token.<br><span id="bc-scope-missing" style="color:var(--muted)"></span></div>
   </div>
 
+  <div class="sec" style="margin-top:8px"><span style="font-size:11px;color:var(--muted);font-weight:600;letter-spacing:.05em">ALERTS</span></div>
+  <div class="field field-secret"><label>StreamElements JWT Token <span class="b-opt">alerts</span></label><input id="seJwt" type="password" oninput="saveField(this)" placeholder="See guide below"><button type="button" class="eye-btn" onclick="toggleSecret(this)" title="Show/hide"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+  <div class="field" style="margin-top:-4px">
+    <button class="btn btn-mod" style="width:100%;font-size:12px;padding:6px 0;background:var(--twitch);color:#fff;border-color:var(--twitch)" onclick="window.electronAPI.openExternal('https://streamelements.com/dashboard/account/channels')">Get StreamElements Token</button>
+    <p style="font-size:11px;color:var(--muted);margin-top:6px;line-height:1.6">Click the button, copy the <b>JWT Token</b>, and paste it above. Mods can leave this blank.</p>
+  </div>
+
   <div class="sec"><span class="badge b-yt">YouTube</span><span class="b-opt">optional</span></div>
   <div class="field"><label>YouTube Channel</label><input id="ytVideoId" oninput="saveField(this)" placeholder="@channelname, channel ID or live URL"></div>
-  <div class="field" style="display:flex;align-items:center;justify-content:space-between;gap:12px">
-    <label style="margin:0">Auto-connect YouTube on launch</label>
-    <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
-      <input type="checkbox" id="ytAutoConnectToggle" onchange="setYtAutoConnect(this.checked)" style="width:16px;height:16px;cursor:pointer">
-      <span id="ytAutoConnectLabel" style="font-size:11px;color:var(--muted)">Off</span>
-    </label>
-  </div>
 
   <div class="sec" style="margin-top:8px"><span style="font-size:11px;color:var(--muted);font-weight:600;letter-spacing:.05em">OBS OVERLAY</span></div>
   <div class="field">
     <label>Browser Source URL</label>
     <div style="display:flex;align-items:center;gap:6px">
       <input id="overlayUrlDisplay" type="text" readonly value="http://localhost:3899" style="flex:1;cursor:default;opacity:.75">
-      <button type="button" class="btn" id="overlayUrlCopyBtn" style="flex-shrink:0;padding:5px 10px;font-size:11px" onclick="navigator.clipboard.writeText(el('overlayUrlDisplay').value).then(()=>{this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)})">Copy</button>
+      <button type="button" class="btn btn-mod" id="overlayUrlCopyBtn" style="flex-shrink:0;padding:5px 10px;font-size:11px" onclick="navigator.clipboard.writeText(el('overlayUrlDisplay').value).then(()=>{this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)})">Copy</button>
     </div>
     <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
       <label style="font-size:11px;color:var(--muted);margin:0;flex-shrink:0">Font size</label>
@@ -427,11 +456,16 @@ body.chatters-open .profile-panel:not(.open){right:-120px}
 
   <div class="sec" style="margin-top:8px"><span style="font-size:11px;color:var(--muted);font-weight:600;letter-spacing:.05em">APP</span></div>
   <div class="field" style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+    <label style="margin:0">Remember window size &amp; position</label>
+    <div class="cm-toggle" id="rememberBoundsToggle" onclick="this.classList.toggle('on');setRememberBounds(this.classList.contains('on'))"></div>
+  </div>
+  <div class="field" style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:-4px">
+    <label style="margin:0">Auto-connect YouTube on launch</label>
+    <div class="cm-toggle" id="ytAutoConnectToggle" onclick="this.classList.toggle('on');setYtAutoConnect(this.classList.contains('on'))"></div>
+  </div>
+  <div class="field" style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:-4px">
     <label style="margin:0">Auto-check for updates</label>
-    <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
-      <input type="checkbox" id="autoUpdateToggle" onchange="setAutoUpdate(this.checked)" style="width:16px;height:16px;cursor:pointer">
-      <span id="autoUpdateLabel" style="font-size:11px;color:var(--muted)">On</span>
-    </label>
+    <div class="cm-toggle" id="autoUpdateToggle" onclick="this.classList.toggle('on');setAutoUpdate(this.classList.contains('on'))"></div>
   </div>
   <div class="field" style="margin-top:-4px">
     <button class="btn" style="width:100%;background:var(--twitch);color:#fff;font-size:12px;padding:7px 0" onclick="manualCheckUpdate()" id="checkUpdateBtn">Check for Updates</button>
@@ -455,6 +489,7 @@ body.chatters-open .profile-panel:not(.open){right:-120px}
     <div id="delay-badge" class="delay-badge" style="display:none">⏱ <input class="delay-input" id="delaySeconds" type="number" min="0" max="300" value="6" title="Streamer delay (seconds)">s delay</div>
     <button class="settings-btn" id="settingsBtn" onclick="goToSettings()" title="Back to settings">⚙ Settings<span id="settings-warn" style="display:none;color:var(--amber);margin-left:4px">⚠</span></button>
     <button class="chatters-btn" id="chattersBtn" onclick="toggleChatters()" title="Community">👥</button>
+    <button class="chatters-btn" id="alertsBtn" onclick="toggleAlertsPanel()" title="Alerts">🔔<span class="alert-badge" id="alertsBadge" style="display:none"></span></button>
     <div class="dots">
       <div class="dot"><div class="dc" id="d-tw"></div>Twitch</div>
       <div class="dot"><div class="dc" id="d-yt"></div>YouTube</div>
@@ -538,6 +573,7 @@ body.chatters-open .profile-panel:not(.open){right:-120px}
 
   <!-- Profile panel -->
   <div class="profile-panel" id="profilePanel">
+    <div class="panel-resizer" data-panel="profilePanel" data-var="--profile-w"></div>
     <div class="pp-header" id="ppHeader">
       <button class="pp-close" onclick="closeProfile()">✕</button>
       <div class="pp-loading" style="width:100%;padding:30px 0">Loading…</div>
@@ -545,8 +581,24 @@ body.chatters-open .profile-panel:not(.open){right:-120px}
     <div class="pp-body" id="ppBody"></div>
   </div>
 
+  <!-- Alerts panel -->
+  <div class="alerts-panel" id="alertsPanel">
+    <div class="panel-resizer" data-panel="alertsPanel" data-var="--alerts-w"></div>
+    <div class="ap-header">
+      <span class="ap-title">🔔 Alerts</span>
+      <button class="ap-close" onclick="toggleAlertsPanel()" title="Close">✕</button>
+    </div>
+    <div class="ap-body" id="alertsBody">
+      <div class="alerts-empty" id="alertsEmpty">
+        <div style="font-size:28px;opacity:.3">🔔</div>
+        <p style="font-size:13px">No alerts yet — follows, subs, and redeems will appear here.</p>
+      </div>
+    </div>
+  </div>
+
   <!-- Chatters panel -->
   <div class="chatters-panel" id="chattersPanel">
+    <div class="panel-resizer" data-panel="chattersPanel" data-var="--chatters-w"></div>
     <div class="cp-header">
       <span class="cp-title">Community</span>
       <span class="cp-count" id="cpCount"></span>
@@ -588,7 +640,7 @@ body.chatters-open .profile-panel:not(.open){right:-120px}
 <script>
 
 // ═══════ PERSIST SETUP FIELDS ═══════
-const SETUP_FIELDS = ['fbUrl','fbKey','twChannel','twClientId','twClientId2','delaySeconds','ytVideoId','twBcToken'];
+const SETUP_FIELDS = ['fbUrl','fbKey','twChannel','twClientId','twClientId2','delaySeconds','ytVideoId','twBcToken','seJwt'];
 
 function toggleSecret(btn){
   const wrap = btn.closest('.field-secret');
@@ -653,7 +705,7 @@ function extractTwitchToken(e){
 function getTwitchToken(){
   const cid = document.getElementById('twClientId2').value.trim();
   if(!cid){ alert('Enter your Client ID first.'); return; }
-  const scopes = 'moderator:manage:chat_messages+user:write:chat+moderator:manage:banned_users+moderator:manage:warnings+moderator:read:followers+channel:read:subscriptions+moderator:manage:chat_settings+moderator:manage:shoutouts+moderator:manage:announcements+channel:manage:raids+moderator:read:chatters+moderation:read';
+  const scopes = 'moderator:manage:chat_messages+user:write:chat+moderator:manage:banned_users+moderator:manage:warnings+moderator:read:followers+channel:read:subscriptions+moderator:manage:chat_settings+moderator:manage:shoutouts+moderator:manage:announcements+channel:manage:raids+moderator:read:chatters+moderation:read+channel:read:redemptions';
   const url = `https://id.twitch.tv/oauth2/authorize?client_id=${encodeURIComponent(cid)}&redirect_uri=http://localhost&response_type=token&scope=${scopes}`;
   // Open in default system browser
   if(window.electronAPI && window.electronAPI.openExternal){
@@ -666,7 +718,7 @@ function getTwitchToken(){
 function getBroadcasterToken(){
   const cid = document.getElementById('twClientId2').value.trim();
   if(!cid){ alert('Enter your Client ID first.'); return; }
-  const scopes = 'channel:manage:polls+channel:manage:predictions+channel:manage:broadcast+moderation:read+channel:read:vips';
+  const scopes = 'channel:manage:polls+channel:manage:predictions+channel:manage:broadcast+moderation:read+channel:read:vips+channel:read:redemptions';
   const url = `https://id.twitch.tv/oauth2/authorize?client_id=${encodeURIComponent(cid)}&redirect_uri=http://localhost&response_type=token&scope=${scopes}`;
   if(window.electronAPI && window.electronAPI.openExternal){
     window.electronAPI.openExternal(url);
@@ -681,7 +733,6 @@ function saveField(input){
 
 function setYtAutoConnect(enabled){
   localStorage.setItem('sc_ytAutoConnect', enabled?'true':'false');
-  el('ytAutoConnectLabel').textContent=enabled?'On':'Off';
 }
 
 function restoreFields(){
@@ -691,8 +742,7 @@ function restoreFields(){
     if(saved&&el) el.value=saved;
   });
   const ytAuto=localStorage.getItem('sc_ytAutoConnect')==='true';
-  el('ytAutoConnectToggle').checked=ytAuto;
-  el('ytAutoConnectLabel').textContent=ytAuto?'On':'Off';
+  el('ytAutoConnectToggle').classList.toggle('on',ytAuto);
 }
 
 restoreFields();
@@ -700,7 +750,8 @@ restoreFields();
 // ═══════ STATE ═══════
 let DELAY = 6000;
 let mode='streamer', cfg={}, messages=[], deletedIds=new Map(), overlayShownIds=new Set();
-let fbRef=null, twitchWs=null;
+let fbRef=null, fbAlertRef=null, twitchWs=null;
+let isStreamer=null; // null=unknown, true=streamer (SE username matches cfg.twCh), false=mod
 const ytTabId=Math.random().toString(36).slice(2); // unique per tab
 let twToken=null, twUserId=null, twBroadcasterId=null, twDisplayName=null, ytToken=null, twBcToken=null;
 const timedOutUsers={}; // username.lower -> {until: ms, duration: s}
@@ -712,6 +763,7 @@ const sessionActions={}; // userId -> {timeouts:n, bans:n}
 let ytChatId=null, ytNextPage=null;
 let ytHistoricalTimer=null;
 let sendPlatform='twitch';
+let alerts=[]; let eventSubWs=null;
 let replyToMsg=null; // message being replied to
 
 // Emote storage
@@ -733,13 +785,13 @@ const ytUserList = new Map();
 
 // ═══════ SETUP ═══════
 function launch(m){
-  const fbUrl=v('fbUrl'),fbKey=v('fbKey'),twCh=v('twChannel'),twToken_=v('twClientId'),twCid=v('twClientId2'),ytVid=v('ytVideoId'),twBcToken_=v('twBcToken');
+  const fbUrl=v('fbUrl'),fbKey=v('fbKey'),twCh=v('twChannel'),twToken_=v('twClientId'),twCid=v('twClientId2'),ytVid=v('ytVideoId'),twBcToken_=v('twBcToken'),seJwt_=v('seJwt');
   const delaySec=v('delaySeconds');
   if(!twCh){alert('Enter a Twitch channel name.');return;}
   if(!twToken_){alert('Enter your Twitch OAuth token.');return;}
   if((!fbUrl||!fbKey)&&!confirm('Firebase not configured — deletions won\'t sync across devices. Continue?'))return;
 
-  const newCfg={fbUrl,fbKey,twCh:twCh.toLowerCase(),twCid,twToken:twToken_,ytVid,twBcToken:twBcToken_,delay:delaySec?parseFloat(delaySec)*1000:6000};
+  const newCfg={fbUrl,fbKey,twCh:twCh.toLowerCase(),twCid,twToken:twToken_,ytVid,twBcToken:twBcToken_,seJwt:seJwt_,delay:delaySec?parseFloat(delaySec)*1000:6000};
 
   // Check what changed vs the previous config (if returning from settings)
   let prevCfg = null;
@@ -760,6 +812,7 @@ function launch(m){
   cfg = newCfg;
 
   if(needsFullReset){
+    if(channelChanged){localStorage.removeItem('sc_alerts');localStorage.removeItem('sc_seUsername');localStorage.removeItem('sc_seChannelId');}
     resetSession();
     if(twToken_){ twToken=twToken_; sessionStorage.setItem('tw_token', twToken_); }
     if(twBcToken_) twBcToken=twBcToken_;
@@ -770,7 +823,7 @@ function launch(m){
     sessionStorage.setItem('stream_mode',mode);
     el('setup').style.display='none';
     el('app').style.display='flex';
-    initApp();
+    initApp(channelChanged);
   } else {
     // Same channel/token/mode — just update non-disruptive settings and return to chat
     DELAY = cfg.delay;
@@ -797,7 +850,7 @@ function launch(m){
 function v(id){return document.getElementById(id).value.trim();}
 
 // ═══════ INIT ═══════
-function initApp(){
+function initApp(channelChanged=false){
   // If delay was customised in a previous session, restore it
   const savedDelaySec=localStorage.getItem('sc_delaySeconds');
   if(savedDelaySec&&!isNaN(savedDelaySec)&&cfg.delay===undefined){
@@ -826,6 +879,25 @@ function initApp(){
   connectTwitch();
   if(cfg.ytVid&&localStorage.getItem('sc_ytAutoConnect')==='true') connectYoutube();
   else if(!cfg.ytVid) showBanner('bn-noyt');
+  loadPersistedAlerts();
+  if(cfg.seJwt){
+    if(window.electronAPI?.onSEAlert) window.electronAPI.onSEAlert(alert=>addAlert(alert));
+    window.electronAPI.onSEChannelId(id=>{localStorage.setItem('sc_seChannelId',id);});
+    const storedCid=localStorage.getItem('sc_seChannelId');
+    const storedUsername=(localStorage.getItem('sc_seUsername')||'').toLowerCase();
+    if(storedCid&&storedUsername){
+      isStreamer=(storedUsername===cfg.twCh);
+      console.log('[SE] isStreamer (cached):',isStreamer,'(SE username:',storedUsername,'cfg.twCh:',cfg.twCh,')');
+      if(isStreamer){window.electronAPI.connectSE(cfg.seJwt);if(!channelChanged)fetchSEActivityHistory(cfg.seJwt,storedCid);}
+      else if(fbAlertRef) subscribeRTDBAlerts();
+    } else {
+      fetchSEChannelThenHistory(cfg.seJwt,channelChanged);
+    }
+  } else if(fbAlertRef){
+    subscribeRTDBAlerts();
+  }
+  if(localStorage.getItem('sc_chattersOpen')==='1') openChatters();
+  if(localStorage.getItem('sc_alertsOpen')==='1') toggleAlertsPanel();
   updateSendUI();
   renderLoop();
 }
@@ -846,6 +918,61 @@ function updateModeUI(){
   renderMessages();
 }
 function switchMode(m){mode=m;sessionStorage.setItem('stream_mode',m);updateModeUI();checkBroadcasterTokenScopes();}
+function updatePanelOffset(){
+  let total=0;
+  for(const id of['alertsPanel','chattersPanel','profilePanel']){
+    const p=el(id);
+    if(p&&p.classList.contains('open')) total+=p.offsetWidth;
+  }
+  document.documentElement.style.setProperty('--panel-offset',total+'px');
+}
+
+function initPanelResize(handle){
+  const cssVar=handle.dataset.var;
+  const minW=160, maxW=600;
+  handle.addEventListener('mousedown',e=>{
+    const panel=handle.parentElement;
+    const startX=e.clientX;
+    const startW=panel.offsetWidth;
+    handle.classList.add('active');
+    document.body.style.cursor='ew-resize';
+    document.body.style.userSelect='none';
+    const onMove=e=>{
+      const newW=Math.max(minW,Math.min(maxW,startW+(startX-e.clientX)));
+      document.documentElement.style.setProperty(cssVar,newW+'px');
+      localStorage.setItem('sc_pw_'+cssVar,newW);
+      updatePanelOffset();
+    };
+    const onUp=()=>{
+      handle.classList.remove('active');
+      document.body.style.cursor='';
+      document.body.style.userSelect='';
+      document.removeEventListener('mousemove',onMove);
+      document.removeEventListener('mouseup',onUp);
+    };
+    document.addEventListener('mousemove',onMove);
+    document.addEventListener('mouseup',onUp);
+    e.preventDefault();
+  });
+}
+
+document.querySelectorAll('.panel-resizer').forEach(initPanelResize);
+for(const v of['--alerts-w','--chatters-w','--profile-w']){
+  const saved=localStorage.getItem('sc_pw_'+v);
+  if(saved) document.documentElement.style.setProperty(v,saved+'px');
+}
+
+function toggleAlertsPanel(){
+  const panel=el('alertsPanel');
+  const btn=el('alertsBtn');
+  const isOpen=panel.classList.contains('open');
+  panel.classList.toggle('open',!isOpen);
+  btn.classList.toggle('active',!isOpen);
+  document.body.classList.toggle('alerts-open',!isOpen);
+  if(!isOpen) el('alertsBadge').style.display='none';
+  localStorage.setItem('sc_alertsOpen',!isOpen?'1':'0');
+  updatePanelOffset();
+}
 
 // ═══════ FIREBASE ═══════
 function initFirebase(){
@@ -855,6 +982,7 @@ function initFirebase(){
     const db=firebase.database(app);
     // Deleted message sync
     fbRef=db.ref('stream-chat/deleted');
+    fbAlertRef=db.ref('seAlerts/'+cfg.twCh+'/events');
     const fbDelHandler=snap=>{const v=snap.val();const by=(v&&v.by)?v.by:null;if(!deletedIds.has(snap.key)||deletedIds.get(snap.key)===null)deletedIds.set(snap.key,by);renderMessages();};
     fbRef.on('child_added',fbDelHandler,()=>{dot('d-fb','err');showBanner('bn-fbw');});
     fbRef.on('child_changed',fbDelHandler);
@@ -910,6 +1038,7 @@ async function onTwitchAuthed(){
   checkTwitchScopes();
   checkBroadcasterTokenScopes();
   startPollPolling();
+  fetchTwitchAlertHistory();
 }
 // ═══════ LIVE POLL WIDGET ═══════
 let activePoll=null,pollCheckInterval=null,pollCountdownTimer=null,pollEndTimeout=null,pollDismissed=false;
@@ -1690,17 +1819,42 @@ function parseTwitchMsg(line){
 }
 function parseTwitchUserNotice(line){
   const tags=parseTags(line);
-  if(tags['msg-id']!=='announcement') return;
-  const match=line.match(/USERNOTICE #\S+ :(.+)$/);
-  if(!match) return;
-  const id=tags['id']||('tw-an-'+Date.now()+Math.random().toString(36).slice(2));
-  const COLOR_MAP={primary:'#9146ff',blue:'#1e90ff',green:'#00c853',orange:'#ff6d00',purple:'#aa00ff'};
-  const announceColor=COLOR_MAP[(tags['msg-param-color']||'primary').toLowerCase()]||'#9146ff';
-  addMsg({id,platform:'twitch',author:tags['display-name']||'',text:match[1],
-    emotesTag:tags['emotes']||'',authorId:tags['user-id']||null,
-    badgesTag:tags['badges']||'',badgeInfoTag:tags['badge-info']||'',
-    color:tags['color']||announceColor,ts:parseInt(tags['tmi-sent-ts'])||Date.now(),
-    isAnnouncement:true,announcementColor:announceColor});
+  const msgId=tags['msg-id'];
+  const ts=parseInt(tags['tmi-sent-ts'])||Date.now();
+  const user=tags['display-name']||tags['login']||'';
+
+  if(msgId==='announcement'){
+    const match=line.match(/USERNOTICE #\S+ :(.+)$/);
+    if(!match) return;
+    const id=tags['id']||('tw-an-'+Date.now()+Math.random().toString(36).slice(2));
+    const COLOR_MAP={primary:'#9146ff',blue:'#1e90ff',green:'#00c853',orange:'#ff6d00',purple:'#aa00ff'};
+    const announceColor=COLOR_MAP[(tags['msg-param-color']||'primary').toLowerCase()]||'#9146ff';
+    addMsg({id,platform:'twitch',author:user,text:match[1],
+      emotesTag:tags['emotes']||'',authorId:tags['user-id']||null,
+      badgesTag:tags['badges']||'',badgeInfoTag:tags['badge-info']||'',
+      color:tags['color']||announceColor,ts,
+      isAnnouncement:true,announcementColor:announceColor});
+    return;
+  }
+
+  if(msgId==='sub'){
+    addAlert({type:'sub',user,tier:tags['msg-param-sub-plan']||'1000',ts});
+  } else if(msgId==='resub'){
+    const match=line.match(/USERNOTICE #\S+ :(.*)$/);
+    addAlert({type:'resub',user,tier:tags['msg-param-sub-plan']||'1000',
+      months:parseInt(tags['msg-param-cumulative-months']||'0'),
+      streak:parseInt(tags['msg-param-streak-months']||'0'),
+      message:(match&&match[1].trim())||'',ts});
+  } else if(msgId==='subgift'){
+    addAlert({type:'gift_sub',user,tier:tags['msg-param-sub-plan']||'1000',
+      gifted_to:tags['msg-param-recipient-display-name']||tags['msg-param-recipient-user-name']||'',ts});
+  } else if(msgId==='submysterygift'){
+    addAlert({type:'mystery_gift',user,tier:tags['msg-param-sub-plan']||'1000',
+      count:parseInt(tags['msg-param-mass-gift-count']||'1'),ts});
+  } else if(msgId==='raid'){
+    addAlert({type:'raid',user:tags['msg-param-displayName']||user,
+      count:parseInt(tags['msg-param-viewerCount']||'0'),ts});
+  }
 }
 
 function parseClearMsg(line){const tags=parseTags(line);const id=tags['target-msg-id'];if(!id||deletedIds.get(fbKey(id)))return;syncDelete(id,tags['login']||null);}
@@ -1723,6 +1877,255 @@ function parseClearChat(line){
   if(displayName) setTimeout(()=>refreshModButtons(displayName),0);
   const text=dur>0?`${displayName} was timed out for ${fmtDur(dur)}`:`${displayName} was permanently banned`;
   addMsg({id:'sys_'+Date.now()+'_'+Math.random().toString(36).slice(2),platform:'system',text,ts:Date.now()});
+}
+
+// ═══════ ALERTS ═══════
+let _loadingAlerts=false;
+
+function addAlert(alert){
+  if(!alert.id) alert.id='al_'+Date.now()+Math.random().toString(36).slice(2);
+  if(alert.twId&&alerts.some(a=>a.twId===alert.twId)) return; // dedup
+  alerts.unshift(alert); // newest first
+  if(alerts.length>200) alerts.pop();
+  const body=el('alertsBody');
+  if(!body) return;
+  el('alertsEmpty').style.display='none';
+  const time=fmtAlertTime(alert.ts);
+  const div=document.createElement('div');
+  div.innerHTML=buildAlertHtml(alert,time);
+  body.insertBefore(div.firstChild, el('alertsEmpty'));
+  if(!_loadingAlerts&&!el('alertsPanel').classList.contains('open')) el('alertsBadge').style.display='inline-block';
+  if(!_loadingAlerts) persistAlerts();
+  if(!_loadingAlerts&&isStreamer) relayAlertToRTDB(alert);
+}
+
+function persistAlerts(){
+  try{localStorage.setItem('sc_alerts',JSON.stringify(alerts));}catch{}
+}
+
+function loadPersistedAlerts(){
+  try{
+    const saved=JSON.parse(localStorage.getItem('sc_alerts')||'[]');
+    if(!saved.length) return;
+    _loadingAlerts=true;
+    for(let i=saved.length-1;i>=0;i--) addAlert(saved[i]); // oldest→newest so newest ends on top
+    _loadingAlerts=false;
+  }catch{_loadingAlerts=false;}
+}
+
+function relayAlertToRTDB(alert){
+  if(!fbAlertRef||isStreamer!==true) return;
+  const key=fbKey(alert.twId||alert.id||'');
+  if(!key) return;
+  const data={};
+  for(const f of ['type','user','userId','ts','amount','currency','message','months','tier','count','reward','input','recipient']){
+    if(alert[f]!=null) data[f]=alert[f];
+  }
+  fbAlertRef.child(key).set(data);
+}
+async function subscribeRTDBAlerts(){
+  if(!fbAlertRef) return;
+  const since=Date.now();
+  await new Promise(resolve=>{
+    fbAlertRef.orderByChild('ts').limitToLast(50).once('value',snap=>{
+      const items=[];
+      snap.forEach(child=>items.push({...child.val(),twId:child.key}));
+      _loadingAlerts=true;
+      items.forEach(a=>addAlert(a));
+      _loadingAlerts=false;
+      reorderAlerts();
+      persistAlerts();
+      resolve();
+    },()=>resolve());
+  });
+  fbAlertRef.orderByChild('ts').startAt(since).on('child_added',snap=>{
+    addAlert({...snap.val(),twId:snap.key});
+  });
+}
+async function fetchTwitchAlertHistory(){
+  if(!twBroadcasterId||!twBcToken) return;
+  _loadingAlerts=true;
+  try{
+    // Followers — bc token owner doesn't need extra scope for their own channel
+    const r=await bcFetch(`https://api.twitch.tv/helix/channels/followers?broadcaster_id=${twBroadcasterId}&first=20`);
+    ([...(r.data||[])]).reverse().forEach(f=>{ // oldest first so newest ends on top
+      addAlert({twId:'follow_'+f.user_id,type:'follow',user:f.user_name,ts:new Date(f.followed_at).getTime()});
+    });
+  }catch{}
+  _loadingAlerts=false;
+  reorderAlerts();
+  persistAlerts();
+}
+
+async function fetchSEChannelThenHistory(jwt,channelChanged=false){
+  try{
+    console.log('[SE] Fetching channel info...');
+    const r=await fetch('https://api.streamelements.com/kappa/v2/channels/me',{headers:{'Authorization':'Bearer '+jwt}});
+    if(!r.ok){console.warn('[SE] /channels/me failed:',r.status);if(fbAlertRef)subscribeRTDBAlerts();return;}
+    const d=await r.json();
+    const cid=d._id;
+    const seUsername=(d.username||'').toLowerCase();
+    isStreamer=(seUsername===cfg.twCh);
+    console.log('[SE] isStreamer:',isStreamer,'(SE username:',seUsername,'cfg.twCh:',cfg.twCh,')');
+    if(isStreamer){
+      if(cid){localStorage.setItem('sc_seChannelId',cid);localStorage.setItem('sc_seUsername',seUsername);window.electronAPI.connectSE(jwt);if(!channelChanged)fetchSEActivityHistory(jwt,cid);}
+      else console.warn('[SE] No _id in response:',d);
+    } else {
+      if(fbAlertRef) subscribeRTDBAlerts();
+    }
+  }catch(e){console.warn('[SE] fetchSEChannelThenHistory error:',e);if(fbAlertRef)subscribeRTDBAlerts();}
+}
+async function fetchSEActivityHistory(jwt,channelId){
+  if(!jwt||!channelId) return;
+  try{
+    console.log('[SE] Fetching activities for channel:',channelId);
+    const params='origin=feed&limit=50&types=subscriber&types=follow&types=channelPointsRedemption&types=tip&types=cheer&types=raid&types=host&min%5Btip%5D=0&min%5Bcheer%5D=0&min%5Bsub%5D=0&min%5BgiftedSubs%5D=0&beta=true';
+    const r=await fetch(`https://api.streamelements.com/kappa/v3/activities/${channelId}?${params}`,{headers:{'Authorization':'Bearer '+jwt}});
+    if(!r.ok){console.warn('[SE] /activities failed:',r.status,await r.text());return;}
+    const json=await r.json();
+    console.log('[SE] Raw response:',JSON.stringify(json).slice(0,500));
+    const activities=[...(Array.isArray(json)?json:(json.docs||json.data||[]))].reverse();
+    console.log('[SE] Got',activities.length,'activities');
+    const mapped=activities.map(a=>mapSEActivity(a)).filter(Boolean);
+    _loadingAlerts=true;
+    mapped.forEach(a=>addAlert(a));
+    _loadingAlerts=false;
+    if(fbAlertRef) mapped.forEach(a=>relayAlertToRTDB(a));
+    reorderAlerts();
+    persistAlerts();
+  }catch(e){_loadingAlerts=false;console.warn('[SE] fetchSEActivityHistory error:',e);}
+}
+function mapSEActivity(a){
+  const d=a.data||{};
+  const user=d.displayName||d.username||'unknown';
+  const userId=d.providerId||'';
+  const ts=new Date(a.createdAt).getTime();
+  const id='se_'+a._id;
+  switch(a.type){
+    case 'follow':     return {twId:id,type:'follow',user,userId,ts};
+    case 'tip':        return {twId:id,type:'tip',user,amount:d.amount,currency:d.currency,message:d.message,ts};
+    case 'cheer':      return {twId:id,type:'cheer',user,amount:d.amount,message:d.message,ts};
+    case 'subscriber': {
+      if(d.gifted&&d.sender) return {twId:id,type:'gift_sub',user:d.sender,userId,recipient:user,tier:d.tier,ts};
+      if((d.month||0)>1||(d.streak||0)>1) return {twId:id,type:'resub',user,userId,months:d.month||d.streak,tier:d.tier,message:d.message,ts};
+      return {twId:id,type:'sub',user,userId,tier:d.tier,ts};
+    }
+    case 'raid':       return {twId:id,type:'raid',user,userId,count:d.amount,ts};
+    case 'host':       return {twId:id,type:'host',user,userId,count:d.amount,ts};
+    case 'redemption': return {twId:id,type:'redeem',user,userId,reward:d.redemption?.redemption?.title||d.message||'',input:d.userInput||'',ts};
+    default:           return null;
+  }
+}
+function reorderAlerts(){
+  alerts.sort((a,b)=>b.ts-a.ts);
+  const body=el('alertsBody');
+  [...body.querySelectorAll('.alert-item')].forEach(e=>e.remove());
+  el('alertsEmpty').style.display=alerts.length?'none':'flex';
+  for(let i=alerts.length-1;i>=0;i--){
+    const a=alerts[i];
+    const time=fmtAlertTime(a.ts);
+    const div=document.createElement('div');
+    div.innerHTML=buildAlertHtml(a,time);
+    body.insertBefore(div.firstChild,el('alertsEmpty'));
+  }
+}
+function fmtTier(t){return t==='2000'?'Tier 2':t==='3000'?'Tier 3':'Tier 1';}
+function fmtAlertTime(ts){
+  const d=new Date(ts),now=new Date();
+  const sameDay=d.toDateString()===now.toDateString();
+  const sameYear=d.getFullYear()===now.getFullYear();
+  const t=d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+  if(sameDay) return t;
+  if(sameYear) return d.toLocaleDateString([],{month:'short',day:'numeric'})+' '+t;
+  return d.toLocaleDateString([],{month:'short',day:'numeric',year:'numeric'})+' '+t;
+}
+function buildAlertHtml(a,time){
+  const icons={follow:'❤️',sub:'🟣',resub:'🟣',gift_sub:'🎁',mystery_gift:'🎁',raid:'🚀',redeem:'⭐',tip:'💸',cheer:'💎',host:'📡'};
+  const icon=icons[a.type]||'🔔';
+  let title='',sub='';
+  switch(a.type){
+    case 'follow':  title=`<b>${esc(a.user)}</b> just followed!`; break;
+    case 'sub':     title=`<b>${esc(a.user)}</b> subscribed! <span style="color:var(--muted);font-size:11px">${fmtTier(a.tier)}</span>`; break;
+    case 'resub':
+      title=`<b>${esc(a.user)}</b> resubscribed! <span style="color:var(--muted);font-size:11px">${a.months} months · ${fmtTier(a.tier)}</span>`;
+      if(a.message) sub=a.message; break;
+    case 'gift_sub':
+      title=`<b>${esc(a.user)}</b> gifted a ${fmtTier(a.tier)} sub to <b>${esc(a.gifted_to)}</b>!`; break;
+    case 'mystery_gift':
+      title=`<b>${esc(a.user)}</b> gifted ${a.count} ${fmtTier(a.tier)} sub${a.count!==1?'s':''} to the community!`; break;
+    case 'raid':
+      title=`<b>${esc(a.user)}</b> raided with ${Number(a.count||0).toLocaleString()} viewer${(a.count||0)!==1?'s':''}!`; break;
+    case 'host':
+      title=`<b>${esc(a.user)}</b> hosted with ${Number(a.count||0).toLocaleString()} viewer${(a.count||0)!==1?'s':''}!`; break;
+    case 'tip':
+      title=`<b>${esc(a.user)}</b> tipped <b>${esc(String(a.amount))}</b>`;
+      if(a.message) sub=a.message; break;
+    case 'cheer':
+      title=`<b>${esc(a.user)}</b> cheered <b>${Number(a.amount||0).toLocaleString()} bits</b>`;
+      if(a.message) sub=a.message; break;
+    case 'redeem':
+      title=`<b>${esc(a.user)}</b> redeemed <b>${esc(a.reward)}</b>`;
+      if(a.input) sub=a.input; break;
+    default: title=esc(a.type);
+  }
+  const clickable=a.type!=='tip'&&a.type!=='cheer'&&a.user;
+  const onclick=clickable?` onclick="openTwitchChatter('${esc(a.userId||'')}','${esc(a.user)}');" style="cursor:pointer"`:'';
+  return `<div class="alert-item ${esc(a.type)}"${onclick}>
+    <span class="alert-icon">${icon}</span>
+    <div class="alert-body">
+      <div class="alert-title">${title}</div>
+      ${sub?`<div class="alert-msg">${esc(sub)}</div>`:''}
+    </div>
+    <span class="alert-time">${esc(time)}</span>
+  </div>`;
+}
+
+// ═══════ EVENTSUB ═══════
+function connectEventSub(){
+  if(!twToken||!twBroadcasterId||!twUserId) return;
+  if(eventSubWs&&(eventSubWs.readyState===0||eventSubWs.readyState===1)) return;
+  function open(url){
+    if(eventSubWs){try{eventSubWs.close();}catch{}}
+    const ws=new WebSocket(url||'wss://eventsub.wss.twitch.tv/ws');
+    eventSubWs=ws;
+    ws.onmessage=async(e)=>{
+      let msg; try{msg=JSON.parse(e.data);}catch{return;}
+      const type=msg.metadata?.message_type;
+      if(type==='session_welcome'){
+        const sid=msg.payload.session.id;
+        subEventSub(sid,'channel.channel_points_custom_reward_redemption.add','1',{broadcaster_user_id:twBroadcasterId},twFetch);
+      } else if(type==='session_reconnect'){
+        open(msg.payload.session.reconnect_url);
+      } else if(type==='notification'){
+        handleEventSubNote(msg.payload);
+      }
+    };
+    ws.onerror=()=>{};
+    ws.onclose=()=>{
+      if(eventSubWs===ws){
+        eventSubWs=null;
+        if(twToken&&twBroadcasterId&&twUserId) setTimeout(connectEventSub,10000);
+      }
+    };
+  }
+  open();
+}
+async function subEventSub(sid,type,version,condition,fetchFn=twFetch){
+  try{
+    await fetchFn('https://api.twitch.tv/helix/eventsub/subscriptions',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({type,version,condition,transport:{method:'websocket',session_id:sid}}),
+    });
+  }catch(e){console.warn('[EventSub] Subscribe failed:',type,e.message);}
+}
+function handleEventSubNote(payload){
+  const type=payload.subscription.type;
+  const ev=payload.event;
+  if(type==='channel.follow'){
+    addAlert({type:'follow',user:ev.user_name,ts:Date.now()});
+  } else if(type==='channel.channel_points_custom_reward_redemption.add'){
+    addAlert({type:'redeem',user:ev.user_name,reward:ev.reward.title,input:ev.user_input||'',ts:Date.now()});
+  }
 }
 
 // ═══════ YOUTUBE ═══════
@@ -2250,12 +2653,16 @@ function openChatters(){
   document.body.classList.add('chatters-open');
   if(el('profilePanel').classList.contains('open')) el('profilePanel').classList.add('shift');
   if(!chattersLoaded) refreshChatters();
+  localStorage.setItem('sc_chattersOpen','1');
+  updatePanelOffset();
 }
 function closeChatters(){
   el('chattersPanel').classList.remove('open');
   el('chattersBtn').classList.remove('active');
   document.body.classList.remove('chatters-open');
   el('profilePanel').classList.remove('shift');
+  localStorage.setItem('sc_chattersOpen','0');
+  updatePanelOffset();
 }
 async function refreshChatters(){
   chattersLoaded=true;
@@ -2344,6 +2751,7 @@ function _openProfilePanel(msg){
   renderProfileShell(msg);
   if(msg.platform==='twitch') fetchTwitchProfile(msg);
   else renderYoutubeProfile(msg);
+  updatePanelOffset();
 }
 function openProfile(id) {
   const msg = msgMap.get(id); if(!msg) return;
@@ -2361,6 +2769,7 @@ function closeProfile() {
   el('profilePanel').classList.remove('shift');
   profileUser = null;
   if(chattersAutoHidden){ chattersAutoHidden=false; openChatters(); }
+  updatePanelOffset();
 }
 
 function renderProfileShell(msg) {
@@ -2533,12 +2942,6 @@ el('chatArea').addEventListener('click', e => {
 });
 
 // Close profile panel when clicking outside
-document.addEventListener('click', e => {
-  const panel = el('profilePanel');
-  if (panel.classList.contains('open') && !panel.contains(e.target) && !e.target.closest('.msg-author') && !e.target.closest('#chattersPanel') && !e.target.closest('#chattersBtn')) {
-    closeProfile();
-  }
-});
 
 
 
@@ -3267,14 +3670,22 @@ let updateDownloaded = false;
 async function initUpdateSettings(){
   if(!window.electronAPI) return;
   const enabled = await window.electronAPI.getAutoUpdateEnabled();
-  el('autoUpdateToggle').checked = enabled;
-  el('autoUpdateLabel').textContent = enabled ? 'On' : 'Off';
+  el('autoUpdateToggle').classList.toggle('on', enabled);
 }
 
 function setAutoUpdate(enabled){
   if(!window.electronAPI) return;
   window.electronAPI.setAutoUpdateEnabled(enabled);
-  el('autoUpdateLabel').textContent = enabled ? 'On' : 'Off';
+}
+
+async function initWindowStateSettings(){
+  if(!window.electronAPI?.getWindowState) return;
+  const state = await window.electronAPI.getWindowState();
+  el('rememberBoundsToggle').classList.toggle('on', !!state.rememberBounds);
+}
+
+function setRememberBounds(val){
+  if(window.electronAPI?.setWindowState) window.electronAPI.setWindowState({rememberBounds: val});
 }
 
 async function manualCheckUpdate(){
@@ -3344,6 +3755,7 @@ if(window.electronAPI){
   });
   // Load settings when setup page is shown
   initUpdateSettings();
+  initWindowStateSettings();
 }
 
 function updateOverlayUrl(){
@@ -3356,6 +3768,13 @@ function goToSettings(){
   // Snapshot current config so launch() can detect what changed
   el('setup').dataset.prevCfg = JSON.stringify(cfg);
   el('setup').dataset.prevMode = mode;
+  // Reset any revealed secret fields back to hidden
+  document.querySelectorAll('.field-secret').forEach(wrap=>{
+    const inp=wrap.querySelector('input');
+    const btn=wrap.querySelector('.eye-btn');
+    if(inp) inp.type='password';
+    if(btn){btn.classList.remove('revealed');btn.innerHTML='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';}
+  });
   // Hide app, show setup (fixed overlay - no layout conflict)
   el('app').style.display='none';
   el('setup').style.display='flex';
@@ -3363,11 +3782,22 @@ function goToSettings(){
 
 function resetSession(){
   // Full teardown — called only when config actually changes
+  isStreamer=null;
   stopPollPolling();
   if(twitchWs){try{twitchWs.close();}catch{} twitchWs=null;}
+  if(eventSubWs){try{eventSubWs.close();}catch{} eventSubWs=null;}
   if(window.electronAPI) window.electronAPI.closeYoutubeChat();
+  if(window.electronAPI?.disconnectSE) window.electronAPI.disconnectSE();
+  if(fbAlertRef){fbAlertRef.off();fbAlertRef=null;}
   sessionStorage.clear();
   messages=[]; deletedIds=new Map(); ownMessageIds=new Set(); overlayShownIds=new Set();
+  alerts=[];
+  el('alertsPanel').classList.remove('open');
+  el('alertsBtn').classList.remove('active');
+  document.body.classList.remove('alerts-open');
+  el('alertsBadge').style.display='none';
+  el('alertsEmpty').style.display='flex';
+  [...el('alertsBody').querySelectorAll('.alert-item')].forEach(e=>e.remove());
   if(window.electronAPI?.overlayMsg) window.electronAPI.overlayMsg({type:'clear'});
   twToken=null; twUserId=null; twBroadcasterId=null; twDisplayName=null; twBcToken=null;
   ytToken=null; ytDisplayName=null; ytChatId=null; ytNextPage=null;

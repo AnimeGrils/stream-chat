@@ -48,10 +48,24 @@ ipcMain.on('overlay:msg', (_, data) => broadcastOverlay(data));
 
 // ═══════ MAIN WINDOW ═════════════════════════════════════════════════
 
+function getWindowStatePath() {
+  return path.join(app.getPath('userData'), 'window-state.json');
+}
+function readWindowState() {
+  try { return JSON.parse(fs.readFileSync(getWindowStatePath(), 'utf8')); } catch { return {}; }
+}
+function writeWindowState(data) {
+  try { fs.writeFileSync(getWindowStatePath(), JSON.stringify(data)); } catch {}
+}
+
 function createWindow() {
+  const ws = readWindowState();
+  const useSaved = !!ws.rememberBounds && ws.width && ws.height;
   mainWindow = new BrowserWindow({
-    width: 480,
-    height: 900,
+    width: useSaved ? ws.width : 480,
+    height: useSaved ? ws.height : 900,
+    x: useSaved ? ws.x : undefined,
+    y: useSaved ? ws.y : undefined,
     minWidth: 380,
     minHeight: 600,
     title: 'Stream Chat',
@@ -67,11 +81,21 @@ function createWindow() {
   mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
   mainWindow.setMenuBarVisibility(false);
 
+  mainWindow.on('close', () => {
+    if (readWindowState().rememberBounds) {
+      const b = mainWindow.getBounds();
+      writeWindowState({ ...readWindowState(), x: b.x, y: b.y, width: b.width, height: b.height });
+    }
+  });
+
   mainWindow.on('closed', () => {
     mainWindow = null;
     closeYoutubeChat();
   });
 }
+
+ipcMain.handle('windowState:get', () => { const ws = readWindowState(); return { rememberBounds: !!ws.rememberBounds }; });
+ipcMain.handle('windowState:set', (_, data) => { writeWindowState({ ...readWindowState(), ...data }); });
 
 app.whenReady().then(() => { createWindow(); startOverlayServer(); });
 
@@ -891,6 +915,54 @@ function openOAuthWindow(authUrl, title) {
     });
   });
 }
+
+// ═══════ STREAMELEMENTS SOCKET ═══════════════════════════════════════
+
+const io = require('socket.io-client');
+let seSocket = null;
+
+function mapSEEvent(data) {
+  const ts = Date.now();
+  const d = data.data || {};
+  const user = d.displayName || d.username || 'unknown';
+  const userId = d.providerId || d.userId || '';
+  const twId = data._id ? 'se_' + data._id : '';
+  switch (data.type) {
+    case 'follow':     return { twId, type: 'follow', user, userId, ts };
+    case 'tip':        return { twId, type: 'tip', user, amount: d.amount, currency: d.currency, message: d.message, ts };
+    case 'cheer':      return { twId, type: 'cheer', user, amount: d.amount, message: d.message, ts };
+    case 'subscriber': {
+      if (d.gifted && d.sender) return { twId, type: 'gift_sub', user: d.sender, userId, recipient: user, tier: d.tier, ts };
+      if ((d.month || 0) > 1 || (d.streak || 0) > 1) return { twId, type: 'resub', user, userId, months: d.month || d.streak, tier: d.tier, message: d.message, ts };
+      return { twId, type: 'sub', user, userId, tier: d.tier, ts };
+    }
+    case 'raid':       return { twId, type: 'raid', user, userId, count: d.amount, ts };
+    case 'host':       return { twId, type: 'host', user, userId, count: d.amount, ts };
+    case 'redemption': return { twId, type: 'redeem', user, userId, reward: d.redemption?.redemption?.title || d.message || '', input: d.userInput || '', ts };
+    default:           return null;
+  }
+}
+
+ipcMain.handle('se:connect', (_, jwt) => {
+  if (seSocket) { seSocket.disconnect(); seSocket = null; }
+  if (!jwt) return;
+  seSocket = io('https://realtime.streamelements.com', { transports: ['websocket'] });
+  seSocket.on('connect', () => { console.log('[SE] Socket connected, authenticating...'); seSocket.emit('authenticate', { method: 'jwt', token: jwt }); });
+  seSocket.on('authenticated', (authData) => {
+    console.log('[SE] Socket authenticated, channel:', authData.channelId);
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('se:channelId', authData.channelId);
+  });
+  seSocket.on('event', (data) => {
+    const alert = mapSEEvent(data);
+    if (alert && mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('se:alert', alert);
+  });
+  seSocket.on('unauthorized', (err) => console.warn('[SE] Unauthorized:', err?.message || err));
+  seSocket.on('connect_error', (e) => console.warn('[SE] connect error:', e.message));
+});
+
+ipcMain.handle('se:disconnect', () => {
+  if (seSocket) { seSocket.disconnect(); seSocket = null; }
+});
 
 // Twitch login handled via pre-obtained token — no OAuth server needed
 
