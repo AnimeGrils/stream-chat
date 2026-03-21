@@ -938,7 +938,7 @@ function mapSEEvent(data) {
     }
     case 'raid':       return { twId, type: 'raid', user, userId, count: d.amount, ts };
     case 'host':       return { twId, type: 'host', user, userId, count: d.amount, ts };
-    case 'redemption': return { twId, type: 'redeem', user, userId, reward: d.redemption?.redemption?.title || d.message || '', input: d.userInput || '', ts };
+    case 'redemption': return { twId, type: 'redeem', user, userId, reward: d.redemption?.reward?.title || d.message || '', input: d.redemption?.user_input || d.userInput || '', ts, _raw: JSON.stringify(d) };
     default:           return null;
   }
 }
