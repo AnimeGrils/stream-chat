@@ -881,7 +881,7 @@ function initApp(channelChanged=false){
   else if(!cfg.ytVid) showBanner('bn-noyt');
   loadPersistedAlerts();
   if(cfg.seJwt){
-    if(window.electronAPI?.onSEAlert) window.electronAPI.onSEAlert(alert=>{if(alert._raw){console.log('[SE] Redemption raw data:',alert._raw);delete alert._raw;}addAlert(alert);});
+    if(window.electronAPI?.onSEAlert) window.electronAPI.onSEAlert(alert=>addAlert(alert));
     window.electronAPI.onSEChannelId(id=>{localStorage.setItem('sc_seChannelId',id);});
     const storedCid=localStorage.getItem('sc_seChannelId');
     const storedUsername=(localStorage.getItem('sc_seUsername')||'').toLowerCase();
@@ -1982,8 +1982,6 @@ async function fetchSEActivityHistory(jwt,channelId){
     console.log('[SE] Raw response:',JSON.stringify(json).slice(0,500));
     const activities=[...(Array.isArray(json)?json:(json.docs||json.data||[]))].reverse();
     console.log('[SE] Got',activities.length,'activities');
-    const redeems=activities.filter(a=>a.type==='channelPointsRedemption'||a.type==='redemption');
-    if(redeems.length) console.log('[SE] Redemption activities raw:',JSON.stringify(redeems));
     const mapped=activities.map(a=>mapSEActivity(a)).filter(Boolean);
     _loadingAlerts=true;
     mapped.forEach(a=>addAlert(a));
@@ -2011,7 +2009,7 @@ function mapSEActivity(a){
     case 'raid':       return {twId:id,type:'raid',user,userId,count:d.amount,ts};
     case 'host':       return {twId:id,type:'host',user,userId,count:d.amount,ts};
     case 'redemption':
-    case 'channelPointsRedemption': return {twId:id,type:'redeem',user,userId,reward:d.redemption?.reward?.title||d.redemption?.title||d.message||'',input:d.redemption?.user_input||d.redemption?.userInput||d.userInput||'',ts};
+    case 'channelPointsRedemption': return {twId:id,type:'redeem',user,userId,reward:(typeof d.redemption==='string'?d.redemption:'')||d.message||'',input:d.userInput||'',ts};
     default:           return null;
   }
 }
