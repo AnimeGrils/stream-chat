@@ -1893,7 +1893,7 @@ function addAlert(alert){
   const time=fmtAlertTime(alert.ts);
   const div=document.createElement('div');
   div.innerHTML=buildAlertHtml(alert,time);
-  body.insertBefore(div.firstChild, el('alertsEmpty'));
+  body.insertBefore(div.firstChild, body.firstChild);
   if(!_loadingAlerts&&!el('alertsPanel').classList.contains('open')) el('alertsBadge').style.display='inline-block';
   if(!_loadingAlerts) persistAlerts();
   if(!_loadingAlerts&&isStreamer) relayAlertToRTDB(alert);
@@ -1923,24 +1923,20 @@ function relayAlertToRTDB(alert){
   }
   fbAlertRef.child(key).set(data);
 }
-async function subscribeRTDBAlerts(){
+function subscribeRTDBAlerts(){
+  console.log('[RTDB] subscribeRTDBAlerts called, fbAlertRef=',!!fbAlertRef);
   if(!fbAlertRef) return;
-  const since=Date.now();
-  await new Promise(resolve=>{
-    fbAlertRef.orderByChild('ts').limitToLast(50).once('value',snap=>{
-      const items=[];
-      snap.forEach(child=>items.push({...child.val(),twId:child.key}));
-      _loadingAlerts=true;
-      items.forEach(a=>addAlert(a));
-      _loadingAlerts=false;
-      reorderAlerts();
-      persistAlerts();
-      resolve();
-    },()=>resolve());
-  });
-  fbAlertRef.orderByChild('ts').startAt(since).on('child_added',snap=>{
-    addAlert({...snap.val(),twId:snap.key});
-  });
+  fbAlertRef.orderByChild('ts').limitToLast(50).on('value',snap=>{
+    console.log('[RTDB] on(value) fired, snap.numChildren=',snap.numChildren());
+    const prevIds=new Set(alerts.map(a=>a.twId));
+    alerts.length=0;
+    snap.forEach(child=>{alerts.push({...child.val(),twId:child.key,id:'al_'+child.key});});
+    console.log('[RTDB] alerts loaded:',alerts.length);
+    const hasNew=alerts.some(a=>!prevIds.has(a.twId));
+    reorderAlerts();
+    persistAlerts();
+    if(hasNew&&!el('alertsPanel').classList.contains('open')) el('alertsBadge').style.display='inline-block';
+  },err=>console.error('[RTDB] on(value) error:',err));
 }
 async function fetchTwitchAlertHistory(){
   if(!twBroadcasterId||!twBcToken) return;
@@ -2012,7 +2008,8 @@ function mapSEActivity(a){
     }
     case 'raid':       return {twId:id,type:'raid',user,userId,count:d.amount,ts};
     case 'host':       return {twId:id,type:'host',user,userId,count:d.amount,ts};
-    case 'redemption': return {twId:id,type:'redeem',user,userId,reward:d.redemption?.redemption?.title||d.message||'',input:d.userInput||'',ts};
+    case 'redemption':
+    case 'channelPointsRedemption': return {twId:id,type:'redeem',user,userId,reward:d.redemption?.redemption?.title||d.redemption?.title||d.message||'',input:d.userInput||'',ts};
     default:           return null;
   }
 }
@@ -2021,7 +2018,7 @@ function reorderAlerts(){
   const body=el('alertsBody');
   [...body.querySelectorAll('.alert-item')].forEach(e=>e.remove());
   el('alertsEmpty').style.display=alerts.length?'none':'flex';
-  for(let i=alerts.length-1;i>=0;i--){
+  for(let i=0;i<alerts.length;i++){
     const a=alerts[i];
     const time=fmtAlertTime(a.ts);
     const div=document.createElement('div');
