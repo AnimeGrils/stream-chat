@@ -1979,9 +1979,7 @@ async function fetchSEActivityHistory(jwt,channelId){
     const r=await fetch(`https://api.streamelements.com/kappa/v3/activities/${channelId}?${params}`,{headers:{'Authorization':'Bearer '+jwt}});
     if(!r.ok){console.warn('[SE] /activities failed:',r.status,await r.text());return;}
     const json=await r.json();
-    console.log('[SE] Raw response:',JSON.stringify(json).slice(0,500));
     const activities=[...(Array.isArray(json)?json:(json.docs||json.data||[]))].reverse();
-    console.log('[SE] Got',activities.length,'activities');
     const mapped=activities.map(a=>mapSEActivity(a)).filter(Boolean);
     _loadingAlerts=true;
     mapped.forEach(a=>addAlert(a));
