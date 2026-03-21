@@ -1,6 +1,6 @@
 # Stream Chat
 
-A desktop app that combines Twitch and YouTube live chat into a single interface, with moderation tools, channel management commands, and an OBS overlay.
+A desktop app that combines Twitch and YouTube live chat into a single interface, with moderation tools, channel management commands, an alerts feed, and an OBS overlay.
 
 ---
 
@@ -12,9 +12,12 @@ A desktop app that combines Twitch and YouTube live chat into a single interface
   - [Twitch](#twitch)
   - [YouTube](#youtube)
   - [Broadcaster Token](#broadcaster-token)
+  - [StreamElements Alerts](#streamelements-alerts)
+  - [Window Position](#window-position)
   - [OBS Overlay](#obs-overlay)
 - [Features](#features)
   - [Chat](#chat)
+  - [Alerts Panel](#alerts-panel)
   - [Moderation](#moderation)
   - [Community Panel](#community-panel)
   - [Commands Panel](#commands-panel)
@@ -39,7 +42,7 @@ Open Settings with the gear icon (top right).
 
 ### Firebase
 
-Firebase is used to sync message deletions across multiple instances of the app (e.g. streamer + mods both see the same messages removed).
+Firebase syncs message deletions across all instances of the app, and relays StreamElements alerts to mod clients.
 
 1. Go to [console.firebase.google.com](https://console.firebase.google.com) and sign in with a Google account
 2. Click **Create a project**, give it a name, and click through the setup (you can disable Google Analytics when prompted — it isn't needed)
@@ -51,6 +54,15 @@ Firebase is used to sync message deletions across multiple instances of the app 
   "rules": {
     "stream-chat": {
       "deleted": { ".read": true, ".write": true }
+    },
+    "seAlerts": {
+      "$channel": {
+        "events": {
+          ".indexOn": ["ts"],
+          ".read": true,
+          ".write": true
+        }
+      }
     }
   }
 }
@@ -102,6 +114,30 @@ The broadcaster token allows mods to create polls, predictions, and edit stream 
 - Edit stream title and category
 - Show moderators and VIPs in the Community panel
 
+### StreamElements Alerts
+
+The alerts panel shows follows, subscriptions, raids, cheers, tips, and channel point redeems in real time.
+
+**Streamer setup:**
+1. Click **Get StreamElements Token** in Settings — this opens the StreamElements dashboard
+2. Copy the **JWT Token** shown on the page
+3. Paste it into the **StreamElements JWT Token** field in Settings
+4. Open the app as Streamer — alerts will populate from your recent history and update in real time
+
+The streamer's JWT token never leaves their machine. When new alerts come in, they are automatically relayed to Firebase so mod clients can receive them without needing the token.
+
+**Mod setup:**
+
+Mods do not need a StreamElements token. As long as Firebase is configured and the correct streamer channel name is entered, alerts will appear automatically via the Firebase relay. Leave the **StreamElements JWT Token** field blank.
+
+> If a mod has their own StreamElements account and enters their own JWT token, the app will detect that it doesn't match the streamer's channel and fall back to the Firebase relay automatically.
+
+### Window Position
+
+Enable **Remember window size & position** in Settings to have the app reopen in the same location and at the same size as when it was last closed.
+
+The profile, alerts, and chatters panels can be resized by dragging the left edge of each panel.
+
 ### OBS Overlay
 
 The overlay is a browser source that displays chat messages in OBS. It respects the stream delay and removes deleted messages automatically.
@@ -123,9 +159,9 @@ The overlay displays Twitch and YouTube messages with emotes (including 7TV glob
 
 **Chat delay** — Set a delay in seconds at the top left of chat. All incoming messages are held for that duration before appearing, keeping the chat view in sync with what viewers see on stream.
 
-**Emotes** — Twitch emotes (global and channel), 7TV emotes (global and channel), and YouTube emotes are all rendered inline.
+**Emotes** — Twitch emotes (global and channel), 7TV emotes (global and channel), BTTV emotes, and YouTube emoji are all rendered inline.
 
-**Emote picker** — Click the emote button (smiley face) next to the chat input to browse and insert emotes. Supports search.
+**Emote picker** — Click the emote button (smiley face) next to the chat input to browse and insert emotes. Supports search. YouTube emoji are added to the picker automatically as they appear in chat.
 
 **Autocomplete:**
 - Type `:` followed by letters to autocomplete emote names
@@ -135,6 +171,27 @@ The overlay displays Twitch and YouTube messages with emotes (including 7TV glob
 **Timestamps** — Each message shows a timestamp.
 
 **Streamer / Mod mode** — Select your mode when connecting. Streamer mode shows chat without delay for the broadcaster's view; Mod mode applies the configured delay. Can be swapped in the top left of chat.
+
+### Alerts Panel
+
+Click the **🔔** button (top right of chat) to open the Alerts panel.
+
+The panel shows real-time events from StreamElements:
+
+| Alert | Description |
+|---|---|
+| **Follow** | New follower |
+| **Subscriber** | New subscription |
+| **Resub** | Resubscription with month count |
+| **Gift Sub** | Gifted subscription (shows sender and recipient) |
+| **Cheer** | Bits cheer with amount |
+| **Tip** | Monetary tip with amount |
+| **Raid** | Incoming raid with viewer count |
+| **Channel Points** | Custom reward redemption |
+
+Alerts load the most recent history on startup and update in real time. Click a username in an alert to open their profile panel. Old alerts show the date alongside the time.
+
+Requires [StreamElements setup](#streamelements-alerts).
 
 ### Moderation
 
@@ -211,9 +268,10 @@ See [OBS Overlay setup](#obs-overlay) above. The overlay shows:
 
 - Twitch and YouTube messages
 - Twitch badges (broadcaster, moderator, subscriber, VIP, etc.)
-- Twitch emotes, 7TV emotes, and YouTube emotes
+- Twitch emotes, 7TV emotes, and YouTube emoji
 - Colored announcements with a 📣 badge
 - Messages are automatically removed when deleted or timed out in the main app
+- Messages appear in correct timestamp order
 
 ---
 
