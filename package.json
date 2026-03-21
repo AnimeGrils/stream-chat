@@ -1,6 +1,6 @@
 {
   "name": "stream-chat",
-  "version": "1.5.2",
+  "version": "1.5.3",
   "description": "Combined Twitch + YouTube chat for streamers and mods",
   "main": "main.js",
   "scripts": {
