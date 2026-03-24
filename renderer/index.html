@@ -1014,7 +1014,7 @@ function initFirebase(){
     // Deleted message sync
     fbRef=db.ref('stream-chat/deleted');
     fbAlertRef=db.ref('seAlerts/'+cfg.twCh+'/events');
-    const fbDelHandler=snap=>{const v=snap.val();const by=(v&&v.by)?v.by:null;if(!deletedIds.has(snap.key)||deletedIds.get(snap.key)===null)deletedIds.set(snap.key,by);renderMessages();};
+    const fbDelHandler=snap=>{const v=snap.val();const by=(v&&v.by)?v.by:null;if(!deletedIds.has(snap.key)||deletedIds.get(snap.key)===null){deletedIds.set(snap.key,by);if(overlayShownIds.has(snap.key)&&window.electronAPI?.overlayMsg)window.electronAPI.overlayMsg({type:'delete',id:snap.key});}renderMessages();};
     fbRef.on('child_added',fbDelHandler,()=>{dot('d-fb','err');showBanner('bn-fbw');});
     fbRef.on('child_changed',fbDelHandler);
     fbRef.once('value',()=>dot('d-fb','ok'),()=>{dot('d-fb','err');showBanner('bn-fbw');});
@@ -1319,6 +1319,7 @@ if(window.electronAPI){
   window.electronAPI.onYoutubeDeleted(id=>{
     if(deletedIds.has(fbKey(id))) return;
     deletedIds.set(fbKey(id), null);
+    if(overlayShownIds.has(id)&&window.electronAPI?.overlayMsg) window.electronAPI.overlayMsg({type:'delete',id});
     renderMessages();
     setTimeout(()=>{
       if(fbRef && !deletedIds.get(fbKey(id))) fbRef.child(fbKey(id)).set(true).catch(()=>{});
