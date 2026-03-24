@@ -14,6 +14,7 @@
   --youtube:#ff4444;--youtube-dim:#882222;
   --del:#ff6b6b;--green:#22dd88;--amber:#ffaa44;
   --font:'Inter',sans-serif;--mono:'IBM Plex Mono',monospace;
+  --chat-font-size: 13px;
 }
 body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:100vh;display:flex;flex-direction:column}
 
@@ -73,6 +74,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
 .delay-input::-webkit-inner-spin-button{-webkit-appearance:none;appearance:none}
 #overlayFontSize::-webkit-inner-spin-button,#overlayFontSize::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
 .delay-input:focus{border-bottom-color:var(--twitch)}
+.font-size-ctrl{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted);background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:2px 4px;font-family:var(--mono)}.font-size-ctrl button{background:transparent;border:none;color:var(--muted);cursor:pointer;padding:0 2px;font-size:13px;line-height:1;font-family:var(--font)}.font-size-ctrl button:hover{color:var(--text)}
 
 .auth-panel{background:var(--surface);border-bottom:1px solid var(--border);padding:10px 14px;flex-shrink:0}
 .auth-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
@@ -97,11 +99,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
 .chat-area{flex:1;overflow-y:auto;padding:8px 0}
 .chat-area::-webkit-scrollbar{width:4px}
 .chat-area::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
-.msg{display:flex;align-items:baseline;gap:8px;padding:3px 14px;font-size:13px;line-height:1.6;border-left:2px solid transparent;transition:background .1s}
+.msg{display:flex;align-items:baseline;gap:8px;padding:3px 14px;font-size:var(--chat-font-size, 13px);line-height:1.6;border-left:2px solid transparent;transition:background .1s}
 .msg:hover{background:var(--surface2)}
 .msg.tw{border-left-color:var(--twitch)}
 .msg.yt{border-left-color:var(--youtube)}
-.msg-time{font-size:10px;color:var(--muted);flex-shrink:0;font-family:var(--mono)}
+.msg-time{font-size:calc(var(--chat-font-size, 13px) * 0.77);color:var(--muted);flex-shrink:0;font-family:var(--mono)}
 .msg-badges{display:inline-flex;align-items:center;gap:2px;vertical-align:middle;margin-right:4px;flex-shrink:0}
 .msg-badge{width:18px;height:18px;object-fit:contain;vertical-align:middle;border-radius:2px}
 .msg-body{flex:1;min-width:0;word-break:break-word}
@@ -109,7 +111,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
 .msg-sep{color:var(--muted);margin-right:4px;font-weight:400}
 .msg-system{opacity:.85}.msg-system .msg-body{color:var(--muted);font-style:italic;font-size:11.5px}
 .msg-text{color:rgba(232,232,240,.82)}
-.emote{height:24px;width:auto;vertical-align:middle;margin:0 1px}
+.emote{height:calc(var(--chat-font-size, 13px) * 1.85);width:auto;vertical-align:middle;margin:0 1px}
 .msg-actions{flex-shrink:0;opacity:0;transition:opacity .1s;display:flex;gap:4px}
 .msg:hover .msg-actions{opacity:1}
 .msg.msg-deleted{opacity:.45}
@@ -232,6 +234,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
 .send-btn:hover{filter:brightness(1.12)}
 .send-btn:disabled{opacity:.4;cursor:default}
 .send-btn.yt-send{background:var(--youtube)}
+.char-count{font-size:10px;color:var(--muted);font-family:var(--mono);flex-shrink:0;display:none;min-width:32px;text-align:right}.char-count.warn{color:var(--amber)}.char-count.over{color:var(--del)}
 
 /* ── COMMANDS ── */
 .cmd-btn{background:var(--surface2);border:1px solid var(--border);border-radius:6px;width:34px;height:34px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:15px;transition:all .12s;flex-shrink:0}
@@ -380,9 +383,8 @@ body.alerts-open .profile-panel.open:not(.shift){right:var(--alerts-w,360px)}
 body.alerts-open .profile-panel.open.shift{right:calc(var(--alerts-w,360px) + var(--chatters-w,260px))}
 .panel-resizer{position:absolute;top:0;left:0;bottom:0;width:5px;cursor:ew-resize;z-index:10;transition:background .15s}
 .panel-resizer:hover,.panel-resizer.active{background:var(--twitch);opacity:.5}
-.ap-header{display:flex;align-items:center;gap:8px;padding:14px 16px;border-bottom:1px solid var(--border);flex-shrink:0}
-.ap-title{font-size:13px;font-weight:600;flex:1}
-.ap-close{background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:14px;padding:3px 5px;border-radius:4px;line-height:1;font-family:var(--font)}.ap-close:hover{color:var(--text);background:var(--surface2)}
+.ap-header{display:flex;align-items:center;padding:10px 14px 8px;gap:8px;border-bottom:1px solid var(--border);flex-shrink:0}.ap-title{font-size:13px;font-weight:600;flex:1}.ap-close,.ap-refresh{background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:13px;padding:2px 4px;border-radius:4px}.ap-close:hover,.ap-refresh:hover{color:var(--text);background:var(--surface2)}
+.ap-filters{display:flex;gap:4px;flex-wrap:wrap;padding:8px 10px;border-bottom:1px solid var(--border);flex-shrink:0}.ap-filter{font-size:10px;font-weight:600;padding:2px 7px;border-radius:10px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-family:var(--font);text-transform:uppercase;letter-spacing:.05em;transition:all .12s}.ap-filter.active{background:var(--surface3);color:var(--text);border-color:var(--twitch)}
 .ap-body{flex:1;overflow-y:auto}.ap-body::-webkit-scrollbar{width:4px}.ap-body::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
 .alert-item{display:flex;align-items:flex-start;gap:10px;padding:7px 14px;font-size:13px;line-height:1.5;border-left:3px solid transparent;transition:background .1s;border-bottom:1px solid rgba(255,255,255,.03)}
 .alert-item:hover{background:var(--surface2)}
@@ -400,6 +402,8 @@ body.alerts-open .profile-panel.open.shift{right:calc(var(--alerts-w,360px) + va
 .alert-msg{font-size:12px;color:var(--muted);margin-top:2px}
 .alert-time{font-size:10px;color:var(--muted);font-family:var(--mono);flex-shrink:0;margin-top:3px}
 .alerts-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:10px;color:var(--muted);padding:40px 0}
+.msg.yt-super{border-left-color:var(--amber);background:rgba(255,170,68,.08)}.super-amount{display:inline-block;font-size:10px;font-weight:700;background:rgba(255,170,68,.2);color:var(--amber);border-radius:3px;padding:1px 5px;margin-right:5px;vertical-align:middle}
+.msg.msg-flagged{border:1px solid rgba(255,68,68,.5);border-left:2px solid var(--del);border-radius:4px;background:rgba(255,68,68,.06)}.flag-label{font-size:10px;font-weight:700;color:var(--del);background:rgba(255,68,68,.15);border-radius:3px;padding:1px 5px;margin-right:5px;vertical-align:middle;text-transform:uppercase;letter-spacing:.04em}
 </style>
 </head>
 <body>
@@ -487,6 +491,7 @@ body.alerts-open .profile-panel.open.shift{right:calc(var(--alerts-w,360px) + va
       <button class="mode-btn" id="tab-m" onclick="switchMode('mod')">Mod</button>
     </div>
     <div id="delay-badge" class="delay-badge" style="display:none">⏱ <input class="delay-input" id="delaySeconds" type="number" min="0" max="300" value="6" title="Streamer delay (seconds)">s delay</div>
+    <div class="font-size-ctrl" title="Chat font size"><button onclick="chatFontAdj(-1)">−</button><span id="chatFontSz">13</span>px<button onclick="chatFontAdj(1)">+</button></div>
     <button class="settings-btn" id="settingsBtn" onclick="goToSettings()" title="Back to settings">⚙ Settings<span id="settings-warn" style="display:none;color:var(--amber);margin-left:4px">⚠</span></button>
     <button class="chatters-btn" id="chattersBtn" onclick="toggleChatters()" title="Community">👥</button>
     <button class="chatters-btn" id="alertsBtn" onclick="toggleAlertsPanel()" title="Alerts">🔔<span class="alert-badge" id="alertsBadge" style="display:none"></span></button>
@@ -563,6 +568,7 @@ body.alerts-open .profile-panel.open.shift{right:calc(var(--alerts-w,360px) + va
         <button class="pt-btn" id="pt-yt" onclick="setPlatform('youtube')">YT</button>
       </div>
       <input class="chat-input" id="chatInput" placeholder="Send a message…" onkeydown="onInputKey(event)" oninput="onChatInput(event)" autocomplete="off" spellcheck="false">
+      <span class="char-count" id="charCount"></span>
       <button class="emote-toggle-btn" id="emoteToggleBtn" onclick="toggleEmotePicker()" title="Emotes">😊</button>
       <button class="cmd-btn" id="cmdBtn" onclick="toggleCmdDropdown()" title="Commands">⚡</button>
       <button class="send-btn" id="sendBtn" onclick="sendMessage()">Send</button>
@@ -584,10 +590,8 @@ body.alerts-open .profile-panel.open.shift{right:calc(var(--alerts-w,360px) + va
   <!-- Alerts panel -->
   <div class="alerts-panel" id="alertsPanel">
     <div class="panel-resizer" data-panel="alertsPanel" data-var="--alerts-w"></div>
-    <div class="ap-header">
-      <span class="ap-title">🔔 Alerts</span>
-      <button class="ap-close" onclick="toggleAlertsPanel()" title="Close">✕</button>
-    </div>
+    <div class="ap-header"><span class="ap-title">🔔 Alerts</span><button class="ap-refresh" onclick="refreshAlerts()" title="Refresh">↻</button><button class="ap-close" onclick="toggleAlertsPanel()" title="Close">✕</button></div>
+    <div class="ap-filters" id="apFilters"><button class="ap-filter active" data-type="all" onclick="setAlertFilter(this,'all')">All</button><button class="ap-filter" data-type="follow" onclick="setAlertFilter(this,'follow')">Follow</button><button class="ap-filter" data-type="sub" onclick="setAlertFilter(this,'sub')">Sub</button><button class="ap-filter" data-type="raid" onclick="setAlertFilter(this,'raid')">Raid</button><button class="ap-filter" data-type="redeem" onclick="setAlertFilter(this,'redeem')">Redeem</button><button class="ap-filter" data-type="cheer" onclick="setAlertFilter(this,'cheer')">Cheer</button><button class="ap-filter" data-type="tip" onclick="setAlertFilter(this,'tip')">Tip</button></div>
     <div class="ap-body" id="alertsBody">
       <div class="alerts-empty" id="alertsEmpty">
         <div style="font-size:28px;opacity:.3">🔔</div>
@@ -765,6 +769,7 @@ let ytHistoricalTimer=null;
 let sendPlatform='twitch';
 let alerts=[]; let eventSubWs=null;
 let replyToMsg=null; // message being replied to
+let alertTypeFilter='all';
 
 // Emote storage
 // twitchEmotes: Map<name, {id, url}>
@@ -898,8 +903,34 @@ function initApp(channelChanged=false){
   }
   if(localStorage.getItem('sc_chattersOpen')==='1') openChatters();
   if(localStorage.getItem('sc_alertsOpen')==='1') toggleAlertsPanel();
+  const savedFontSz=parseInt(localStorage.getItem('sc_chatFontSz')||'13');
+  document.documentElement.style.setProperty('--chat-font-size',savedFontSz+'px');
+  el('chatFontSz').textContent=savedFontSz;
   updateSendUI();
   renderLoop();
+}
+
+function chatFontAdj(delta){
+  const cur=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--chat-font-size'))||13;
+  const next=Math.max(10,Math.min(22,cur+delta));
+  document.documentElement.style.setProperty('--chat-font-size',next+'px');
+  el('chatFontSz').textContent=next;
+  localStorage.setItem('sc_chatFontSz',next);
+}
+function setAlertFilter(btn,type){
+  alertTypeFilter=type;
+  el('apFilters').querySelectorAll('.ap-filter').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  reorderAlerts();
+}
+function refreshAlerts(){
+  if(isStreamer){
+    const storedCid=localStorage.getItem('sc_seChannelId');
+    if(storedCid) fetchSEActivityHistory(cfg.seJwt,storedCid);
+    else fetchSEChannelThenHistory(cfg.seJwt,false);
+  } else {
+    subscribeRTDBAlerts();
+  }
 }
 
 // ═══════ MODE ═══════
@@ -1385,6 +1416,12 @@ function setPlatform(p){
   cls('pt-yt','pt-btn'+(p==='youtube'?' yt-active':''));
   updateSendUI();
   if(el('emotePicker').classList.contains('open')) renderEmoteGrid();
+  const cc=el('charCount');const len=el('chatInput').value.length;
+  const limit=p==='youtube'?200:500;
+  if(len===0){cc.style.display='none';}
+  else if(len>=limit-50){cc.textContent=len+'/'+limit;cc.style.display='inline';cc.className='char-count'+(len>=limit?' over':' warn');}
+  else{cc.style.display='none';}
+  el('sendBtn').disabled=len>limit;
 }
 
 function onInputKey(e){
@@ -1410,6 +1447,8 @@ async function sendMessage(){
   const inp=el('chatInput');
   const text=getChatText().trim();
   if(!text) return;
+  const limit=sendPlatform==='youtube'?200:500;
+  if(text.length>limit) return;
   if(sendPlatform==='twitch') await sendTwitch(text);
   else await sendYoutube(text);
 }
@@ -1655,6 +1694,16 @@ function onChatInput(e){
   } else {
     closeAc();
   }
+  const cc=el('charCount');
+  const len=el('chatInput').value.length;
+  const limit=sendPlatform==='youtube'?200:500;
+  if(len===0){cc.style.display='none';}
+  else if(len>=limit-50){
+    cc.textContent=len+'/'+limit;
+    cc.style.display='inline';
+    cc.className='char-count'+(len>=limit?' over':' warn');
+  } else {cc.style.display='none';}
+  el('sendBtn').disabled=len>limit;
 }
 
 function showUserAc(query){
@@ -2015,9 +2064,13 @@ function reorderAlerts(){
   alerts.sort((a,b)=>b.ts-a.ts);
   const body=el('alertsBody');
   [...body.querySelectorAll('.alert-item')].forEach(e=>e.remove());
-  el('alertsEmpty').style.display=alerts.length?'none':'flex';
-  for(let i=0;i<alerts.length;i++){
-    const a=alerts[i];
+  const toShow=alertTypeFilter==='all'?alerts:alerts.filter(a=>{
+    if(alertTypeFilter==='sub') return a.type==='sub'||a.type==='resub'||a.type==='gift_sub'||a.type==='mystery_gift';
+    return a.type===alertTypeFilter;
+  });
+  el('alertsEmpty').style.display=toShow.length?'none':'flex';
+  for(let i=0;i<toShow.length;i++){
+    const a=toShow[i];
     const time=fmtAlertTime(a.ts);
     const div=document.createElement('div');
     div.innerHTML=buildAlertHtml(a,time);
@@ -2346,7 +2399,8 @@ function buildMsg(msg){
   }
   const isPing=pingMessageIds.has(msg.id);
   const isAnnounce=!!msg.isAnnouncement;
-  div.className='msg '+(msg.platform==='twitch'?'tw':'yt')+(isPing?' msg-ping':'')+(isAnnounce?' msg-announcement':'');
+  const isSuper=!!msg.isSuperchat;
+  div.className='msg '+(msg.platform==='twitch'?'tw':'yt')+(isPing?' msg-ping':'')+(isAnnounce?' msg-announcement':'')+(isSuper?' yt-super':'');
   if(isAnnounce && msg.announcementColor) div.style.borderLeftColor=msg.announcementColor;
   div.dataset.id=msg.id;
   const t=new Date(msg.ts);
@@ -2358,10 +2412,11 @@ function buildMsg(msg){
   const badgesHtml = buildBadgeImgs(msg);
   const replyBar = msg.replyParentId ? `<div class="msg-reply-bar" data-scrollto="${esc(msg.replyParentId)}"><span class="msg-reply-author">@${esc(msg.replyParentUser||'?')}</span><span class="msg-reply-text">${esc((msg.replyParentText||'').replace(/\\\\s/g,' ').slice(0,80))}</span></div>` : '';
   const announceTag = isAnnounce ? `<span class="announce-tag" style="background:${msg.announcementColor}22;color:${msg.announcementColor};border:1px solid ${msg.announcementColor}44">📣</span>` : '';
+  const superBadge = isSuper&&msg.superAmount ? `<span class="super-amount">${esc(msg.superAmount)}</span>` : '';
   const delLabel=isDel?(delBy?` (Deleted by ${esc(delBy)})`:' (Deleted by a moderator)'):'';
   div.innerHTML=
     `<span class="msg-time">${time}</span>`+
-    `<div class="msg-body">${replyBar}${announceTag}${badgesHtml}<span class="msg-author" style="color:${msg.color}" data-msgid="${esc(msg.id)}">${esc(msg.author)}</span><span class="msg-sep">:</span><span class="msg-text">${renderedText}</span><span class="del-label">${delLabel}</span></div>`;
+    `<div class="msg-body">${replyBar}${announceTag}${badgesHtml}<span class="msg-author" style="color:${msg.color}" data-msgid="${esc(msg.id)}">${esc(msg.author)}</span><span class="msg-sep">:</span>${superBadge}<span class="msg-text">${renderedText}</span><span class="del-label">${delLabel}</span></div>`;
   return div;
 }
 

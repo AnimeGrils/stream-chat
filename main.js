@@ -268,6 +268,7 @@ async function injectChatObserver(page) {
 
       // Process existing messages in DOM order — index preserves ordering
       container.querySelectorAll('yt-live-chat-text-message-renderer').forEach(el => processMsg(el, seen, msgIndex++, false));
+      container.querySelectorAll('yt-live-chat-paid-message-renderer').forEach(el => processPaidMsg(el, seen, msgIndex++, false));
 
       const observer = new MutationObserver(mutations => {
         mutations.forEach(m => {
@@ -279,6 +280,10 @@ async function injectChatObserver(page) {
             }
             // Nested (sometimes wrapped)
             node.querySelectorAll && node.querySelectorAll('yt-live-chat-text-message-renderer').forEach(el => processMsg(el, seen, msgIndex++, true));
+            if (node.tagName && node.tagName.toLowerCase() === 'yt-live-chat-paid-message-renderer') {
+              processPaidMsg(node, seen, msgIndex++, true);
+            }
+            node.querySelectorAll && node.querySelectorAll('yt-live-chat-paid-message-renderer').forEach(el => processPaidMsg(el, seen, msgIndex++, true));
           });
         });
       });
@@ -384,6 +389,45 @@ async function injectChatObserver(page) {
         });
         delObs.observe(el, { attributes: true, attributeFilter: ['is-deleted'] });
       }
+    }
+
+    function processPaidMsg(el, seen, index, isLive) {
+      const id = el.getAttribute('id') || el.getAttribute('data-id') || ('paid-' + Math.random().toString(36).slice(2));
+      if (seen.has(id)) return;
+      seen.add(id);
+      window.__scMsgMap.set(id, el);
+      const authorEl = el.querySelector('#author-name');
+      const msgEl = el.querySelector('#message');
+      const amountEl = el.querySelector('#purchase-amount');
+      const author = authorEl ? authorEl.textContent.trim() : '';
+      if (!author) return;
+      const amount = amountEl ? amountEl.textContent.trim() : '';
+      let text = '';
+      if (msgEl) text = msgEl.textContent.trim();
+      const headerBg = el.getAttribute('header-background-color') || el.style.getPropertyValue('--yt-live-chat-paid-message-primary-color') || '';
+      const authorId = el.getAttribute('author-id') || el.getAttribute('data-author-id') || '';
+      let ts = Date.now();
+      if (!isLive) {
+        const tsText = el.querySelector('#timestamp')?.textContent?.trim();
+        if (tsText) {
+          const m = tsText.match(/(\d+):(\d+)\s*(AM|PM)?/i);
+          if (m) {
+            let h = parseInt(m[1]), min = parseInt(m[2]);
+            const ampm = (m[3] || '').toUpperCase();
+            if (ampm === 'PM' && h < 12) h += 12;
+            if (ampm === 'AM' && h === 12) h = 0;
+            const d = new Date(); d.setHours(h, min, 0, 0);
+            if (d.getTime() > Date.now()) d.setDate(d.getDate() - 1);
+            ts = d.getTime();
+          }
+        }
+      }
+      window.onYTChatMessage({
+        id, author, text, authorId,
+        isMod: false, isLive, platform: 'youtube',
+        isSuperchat: true, superAmount: amount, superColor: headerBg,
+        ts, runs: []
+      });
     }
 
     observe();
