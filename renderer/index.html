@@ -1070,6 +1070,7 @@ async function onTwitchAuthed(){
   checkBroadcasterTokenScopes();
   startPollPolling();
   fetchTwitchAlertHistory();
+  connectEventSub();
 }
 // ═══════ LIVE POLL WIDGET ═══════
 let activePoll=null,pollCheckInterval=null,pollCountdownTimer=null,pollEndTimeout=null,pollDismissed=false;
@@ -1157,7 +1158,7 @@ function updateSettingsWarn(){
   el('settings-warn').style.display=any?'inline':'none';
 }
 async function checkTwitchScopes(){
-  const REQUIRED=['moderator:manage:chat_messages','user:write:chat','moderator:manage:banned_users','moderator:manage:warnings','moderator:read:followers','channel:read:subscriptions','moderator:manage:chat_settings','moderator:manage:shoutouts','moderator:manage:announcements','channel:manage:raids','moderator:read:chatters','moderation:read'];
+  const REQUIRED=['moderator:manage:chat_messages','user:write:chat','moderator:manage:banned_users','moderator:manage:warnings','moderator:read:followers','channel:read:subscriptions','moderator:manage:chat_settings','moderator:manage:shoutouts','moderator:manage:announcements','channel:manage:raids','moderator:read:chatters','moderation:read','channel:read:redemptions'];
   try{
     const r=await fetch('https://id.twitch.tv/oauth2/validate',{headers:{Authorization:'OAuth '+twToken}});
     if(!r.ok) return;
@@ -2132,6 +2133,7 @@ function buildAlertHtml(a,time){
 // ═══════ EVENTSUB ═══════
 function connectEventSub(){
   if(!twToken||!twBroadcasterId||!twUserId) return;
+  if(twBroadcasterId!==twUserId) return; // mods can't subscribe to broadcaster's channel points
   if(eventSubWs&&(eventSubWs.readyState===0||eventSubWs.readyState===1)) return;
   function open(url){
     if(eventSubWs){try{eventSubWs.close();}catch{}}
@@ -2173,7 +2175,7 @@ function handleEventSubNote(payload){
   if(type==='channel.follow'){
     addAlert({type:'follow',user:ev.user_name,ts:Date.now()});
   } else if(type==='channel.channel_points_custom_reward_redemption.add'){
-    addAlert({type:'redeem',user:ev.user_name,reward:ev.reward.title,input:ev.user_input||'',ts:Date.now()});
+    addAlert({twId:'es_'+ev.id,type:'redeem',user:ev.user_name,reward:ev.reward.title,input:ev.user_input||'',ts:Date.now()});
   }
 }
 
