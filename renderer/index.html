@@ -768,7 +768,8 @@ let twToken=null, twUserId=null, twBroadcasterId=null, twDisplayName=null, ytTok
 const timedOutUsers={}; // username.lower -> {until: ms, duration: s}
 const bannedUsers=new Set(); // username.lower
 let ownMessageIds=new Set();
-let pingMessageIds=new Set(); // mod pings to streamer — bypass delay + highlight
+let pingMessageIds=new Set(); // any @mention or reply — highlight only
+let delayBypassIds=new Set(); // mod/broadcaster @mentions — also bypass streamer delay
 const msgMap=new Map(); // id -> msg object for profile lookup
 const sessionActions={}; // userId -> {timeouts:n, bans:n}
 let ytChatId=null, ytNextPage=null;
@@ -1305,7 +1306,10 @@ if(window.electronAPI){
   window.electronAPI.onYoutubeMessage(msg=>{
     const ytPingName=ytDisplayName||twDisplayName;
     const ytPingPattern=ytPingName?new RegExp('@'+ytPingName.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i'):null;
-    if(ytPingPattern&&ytPingPattern.test(msg.text)) pingMessageIds.add(msg.id);
+    if(ytPingPattern&&ytPingPattern.test(msg.text)){
+      pingMessageIds.add(msg.id);
+      if(msg.isMod) delayBypassIds.add(msg.id);
+    }
     msg.color='#ff5555';
     msg.emotesTag='';
     msg.platform='youtube';
@@ -1899,12 +1903,20 @@ function parseTwitchMsg(line){
   const nick=(line.match(/:(\w+)!/)||[])[1]||'anon';
   const id=tags['id']||('tw-'+Date.now()+Math.random().toString(36).slice(2));
   if(twDisplayName&&(tags['display-name']||nick).toLowerCase()===twDisplayName.toLowerCase()) ownMessageIds.add(id);
+  const senderBadges=tags['badges']||'';
+  const isSenderMod=senderBadges.includes('moderator')||senderBadges.includes('broadcaster');
   const pingPattern=twDisplayName?new RegExp('@'+twDisplayName.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i'):null;
-  if(pingPattern&&pingPattern.test(match[1])) pingMessageIds.add(id);
+  if(pingPattern&&pingPattern.test(match[1])){
+    pingMessageIds.add(id);
+    if(isSenderMod) delayBypassIds.add(id); // only mods bypass the delay
+  }
   const replyParentId=tags['reply-parent-msg-id']||null;
   const replyParentUser=tags['reply-parent-user-login']||tags['reply-parent-display-name']||null;
   // Also highlight direct replies to the logged-in user
-  if(replyParentUser&&twDisplayName&&replyParentUser.toLowerCase()===twDisplayName.toLowerCase()) pingMessageIds.add(id);
+  if(replyParentUser&&twDisplayName&&replyParentUser.toLowerCase()===twDisplayName.toLowerCase()){
+    pingMessageIds.add(id);
+    if(isSenderMod) delayBypassIds.add(id);
+  }
   const replyParentText=tags['reply-parent-msg-body']||null;
   addMsg({id,platform:'twitch',author:tags['display-name']||nick,
     text:match[1],emotesTag:tags['emotes']||'',authorId:tags['user-id']||null,badgesTag:tags['badges']||'',badgeInfoTag:tags['badge-info']||'',replyParentId,replyParentUser,replyParentText,
@@ -2267,7 +2279,7 @@ function addMsg(msg){
   if(msg.platform==='youtube'&&msg.author) ytUserList.set(msg.author.toLowerCase(),msg.author);
   // Push to overlay after delay — setTimeout fires even when window is minimized
   if(window.electronAPI?.overlayMsg&&msg.platform!=='system'&&msg.isLive!==false){
-    const d=(ownMessageIds.has(msg.id)||pingMessageIds.has(msg.id))?0:DELAY;
+    const d=(ownMessageIds.has(msg.id)||delayBypassIds.has(msg.id))?0:DELAY;
     setTimeout(()=>{
       if(deletedIds.has(fbKey(msg.id))||overlayShownIds.has(msg.id)) return;
       overlayShownIds.add(msg.id);
@@ -2427,7 +2439,7 @@ function renderYtText(text, runs){
 function renderMessages(){
   const area=document.getElementById('chatArea');
   const now=Date.now(),s=mode==='streamer';
-  const toShow=s?messages.filter(m=>!deletedIds.has(fbKey(m.id))&&(m.platform==='system'||ownMessageIds.has(m.id)||pingMessageIds.has(m.id)||now-m.ts>=DELAY)):messages.filter(m=>!deletedIds.has(fbKey(m.id))||mode==='mod');
+  const toShow=s?messages.filter(m=>!deletedIds.has(fbKey(m.id))&&(m.platform==='system'||ownMessageIds.has(m.id)||delayBypassIds.has(m.id)||now-m.ts>=DELAY)):messages.filter(m=>!deletedIds.has(fbKey(m.id))||mode==='mod');
   el('emptyState').style.display=toShow.length===0?'flex':'none';
   const showSet=new Set(toShow.map(m=>m.id));
   // Remove/update nodes that shouldn't be shown
@@ -3927,7 +3939,7 @@ function resetSession(){
   twToken=null; twUserId=null; twBroadcasterId=null; twDisplayName=null; twBcToken=null;
   ytToken=null; ytDisplayName=null; ytChatId=null; ytNextPage=null;
   clearTimeout(ytHistoricalTimer); ytHistoricalTimer=null;
-  pingMessageIds=new Set(); twUserList.clear(); ytUserList.clear();
+  pingMessageIds=new Set(); delayBypassIds=new Set(); twUserList.clear(); ytUserList.clear();
   el('tw-username').className='auth-username'; el('tw-username').textContent='';
   el('auth-yt-btn').className='auth-btn auth-yt'; el('auth-yt-btn').textContent='Connect YouTube';
   el('auth-yt-btn').onclick=connectYoutube; el('auth-yt-btn').disabled=false;
