@@ -225,7 +225,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
 .pt-btn{padding:4px 8px;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer;border:none;background:transparent;color:var(--muted);font-family:var(--font);transition:all .12s}
 .pt-btn.tw-active{background:var(--twitch);color:#fff}
 .pt-btn.yt-active{background:var(--youtube-dim);color:var(--youtube)}
-.chat-input{flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:6px 12px;color:var(--text);font-family:var(--mono);font-size:13px;outline:none;transition:border-color .15s;height:36px;box-sizing:border-box}
+.chat-input{flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:6px 12px;color:var(--text);font-family:var(--font);font-size:13px;outline:none;transition:border-color .15s;height:36px;box-sizing:border-box}
 .chat-input:focus{border-color:var(--twitch)}
 .emote-toggle-btn{background:var(--surface2);border:1px solid var(--border);border-radius:6px;width:34px;height:34px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;transition:all .12s;flex-shrink:0}
 .emote-toggle-btn:hover{background:var(--surface3);border-color:var(--muted)}
@@ -284,7 +284,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
 .profile-panel.open{right:0}
 .profile-panel.open.shift{right:var(--chatters-w,260px)}
 /* Poll widget */
-#pollWidget{display:none;background:var(--surface);border:1px solid var(--twitch-dim);border-radius:8px;margin:4px 8px 0;padding:10px 12px;flex-shrink:0}
+#pollWidget{display:none;background:var(--surface);border:1px solid var(--twitch-dim);border-radius:8px;margin:4px 8px 0;padding:10px 12px;flex-shrink:0;transition:border-color .3s,background .3s}
+#pollWidget.pw-ended{border-color:var(--muted);background:var(--surface2)}
 .pw-header{display:flex;align-items:center;gap:6px;margin-bottom:8px}
 .pw-label{font-size:10px;font-weight:700;letter-spacing:.06em;color:var(--twitch);text-transform:uppercase;flex-shrink:0}
 .pw-title{font-size:12px;font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -400,6 +401,12 @@ body.alerts-open .profile-panel.open.shift{right:calc(var(--alerts-w,360px) + va
 .alert-body{flex:1;min-width:0;word-break:break-word}
 .alert-title{font-size:13px}
 .alert-msg{font-size:12px;color:var(--muted);margin-top:2px}
+.gift-recipients{font-size:11px;color:var(--muted);margin-top:3px;cursor:pointer}
+.gift-recipients summary{list-style:none;user-select:none;outline:none}
+.gift-recipients summary::marker,.gift-recipients summary::-webkit-details-marker{display:none}
+.gift-recipients summary::before{content:'▶ ';font-size:9px;opacity:.6}
+.gift-recipients[open] summary::before{content:'▼ '}
+.gift-recipient-list{margin-top:3px;padding-left:10px;line-height:1.7}
 .alert-time{font-size:10px;color:var(--muted);font-family:var(--mono);flex-shrink:0;margin-top:3px}
 .alerts-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:10px;color:var(--muted);padding:40px 0}
 .msg.yt-super{border-left-color:var(--amber);background:rgba(255,170,68,.08)}.super-amount{display:inline-block;font-size:10px;font-weight:700;background:rgba(255,170,68,.2);color:var(--amber);border-radius:3px;padding:1px 5px;margin-right:5px;vertical-align:middle}
@@ -494,7 +501,7 @@ body.alerts-open .profile-panel.open.shift{right:calc(var(--alerts-w,360px) + va
     <div class="font-size-ctrl" title="Chat font size"><button onclick="chatFontAdj(-1)">−</button><span id="chatFontSz">13</span>px<button onclick="chatFontAdj(1)">+</button></div>
     <button class="settings-btn" id="settingsBtn" onclick="goToSettings()" title="Back to settings">⚙ Settings<span id="settings-warn" style="display:none;color:var(--amber);margin-left:4px">⚠</span></button>
     <button class="chatters-btn" id="chattersBtn" onclick="toggleChatters()" title="Community">👥</button>
-    <button class="chatters-btn" id="alertsBtn" onclick="toggleAlertsPanel()" title="Alerts">🔔<span class="alert-badge" id="alertsBadge" style="display:none"></span></button>
+    <button class="chatters-btn" id="alertsBtn" onclick="toggleAlertsPanel()" title="Alerts">🔔</button>
     <div class="dots">
       <div class="dot"><div class="dc" id="d-tw"></div>Twitch</div>
       <div class="dot"><div class="dc" id="d-yt"></div>YouTube</div>
@@ -520,7 +527,7 @@ body.alerts-open .profile-panel.open.shift{right:calc(var(--alerts-w,360px) + va
 
   <div id="pollWidget">
     <div class="pw-header">
-      <span class="pw-label">Poll</span>
+      <span class="pw-label" id="pwLabel">Poll</span>
       <span class="pw-title" id="pwTitle"></span>
       <span class="pw-timer" id="pwTimer"></span>
       <button class="pw-dismiss" onclick="dismissPoll()" title="Dismiss">✕</button>
@@ -1000,7 +1007,6 @@ function toggleAlertsPanel(){
   panel.classList.toggle('open',!isOpen);
   btn.classList.toggle('active',!isOpen);
   document.body.classList.toggle('alerts-open',!isOpen);
-  if(!isOpen) el('alertsBadge').style.display='none';
   localStorage.setItem('sc_alertsOpen',!isOpen?'1':'0');
   updatePanelOffset();
 }
@@ -1122,8 +1128,12 @@ function renderPoll(poll,ended){
   clearInterval(pollCountdownTimer);pollCountdownTimer=null;
   const timerEl=el('pwTimer');
   if(ended){
-    timerEl.textContent='Ended';timerEl.style.color='var(--muted)';
+    timerEl.textContent='● ENDED';timerEl.style.color='var(--del)';timerEl.style.fontWeight='700';
+    el('pollWidget').classList.add('pw-ended');
+    el('pwLabel').textContent='Poll Results';
   } else {
+    el('pollWidget').classList.remove('pw-ended');
+    el('pwLabel').textContent='Poll';
     const endMs=new Date(poll.started_at).getTime()+poll.duration*1000;
     const tick=()=>{
       const rem=Math.max(0,Math.round((endMs-Date.now())/1000));
@@ -1151,6 +1161,8 @@ function dismissPoll(){
   pollDismissed=true;
   clearInterval(pollCountdownTimer);pollCountdownTimer=null;
   clearTimeout(pollEndTimeout);pollEndTimeout=null;
+  el('pollWidget').classList.remove('pw-ended');
+  el('pwLabel').textContent='Poll';
   el('pollWidget').style.display='none';
 }
 function updateSettingsWarn(){
@@ -1293,7 +1305,7 @@ if(window.electronAPI){
   window.electronAPI.onYoutubeMessage(msg=>{
     const ytPingName=ytDisplayName||twDisplayName;
     const ytPingPattern=ytPingName?new RegExp('@'+ytPingName.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i'):null;
-    if(msg.isMod&&ytPingPattern&&ytPingPattern.test(msg.text)) pingMessageIds.add(msg.id);
+    if(ytPingPattern&&ytPingPattern.test(msg.text)) pingMessageIds.add(msg.id);
     msg.color='#ff5555';
     msg.emotesTag='';
     msg.platform='youtube';
@@ -1428,6 +1440,7 @@ function setPlatform(p){
 
 function onInputKey(e){
   const ac=el('acDropdown');
+  if(e.key!=='Tab') acTabActive=false; // any non-Tab key exits cycle mode
   if(ac.classList.contains('open')){
     if(e.key==='ArrowDown'){e.preventDefault();moveAcSelection(1);return;}
     if(e.key==='ArrowUp'){e.preventDefault();moveAcSelection(-1);return;}
@@ -1437,10 +1450,29 @@ function onInputKey(e){
       if(sel){ const name=sel.querySelector('.ac-name')?.textContent; if(name){
         if(acMode==='user') commitUserAc(name);
         else if(acMode==='command'){ const cmd=SLASH_COMMANDS.find(c=>c.cmd===name); if(cmd) commitCommandAc(cmd); }
-        else commitAc(name);
+        else commitAc(name, e.key==='Tab');
       } return; }
     }
     if(e.key==='Escape'){closeAc();return;}
+  }
+  // Tab cycling: AC is closed but we just committed an emote via Tab
+  if(e.key==='Tab'&&acTabActive&&acTabMatches.length>1){
+    e.preventDefault();
+    const nextIdx=(acTabIdx+1)%acTabMatches.length;
+    const prevName=acTabMatches[acTabIdx].name;
+    const nextName=acTabMatches[nextIdx].name;
+    const inp=el('chatInput');
+    const cursor=inp.selectionStart;
+    // The cursor sits right after "prevName " — replace it with nextName
+    const after=cursor-prevName.length-1;
+    if(after>=0&&inp.value.slice(after,cursor-1)===prevName){
+      inp.value=inp.value.slice(0,after)+nextName+' '+inp.value.slice(cursor);
+      const pos=after+nextName.length+1;
+      inp.focus();inp.setSelectionRange(pos,pos);
+      acTabIdx=nextIdx;
+      // keep acTabActive = true so further Tab presses keep cycling
+    }
+    return;
   }
   if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMessage();}
 }
@@ -1674,8 +1706,11 @@ function insertEmote(name){
 
 // ═══════ AUTOCOMPLETE (:name) ═══════
 let acSelectedIndex = -1;
-
 let acMode = 'emote'; // 'emote' or 'user'
+// Tab-cycle state for emote autocomplete
+let acTabMatches = []; // last emote matches shown
+let acTabIdx = -1;     // index of last Tab-committed emote
+let acTabActive = false; // true immediately after a Tab commit, cleared by any other key
 
 function onChatInput(e){
   const val = getChatText();
@@ -1755,6 +1790,7 @@ function showAc(query){
   const q = query.toLowerCase();
   const matches = allEmotes.filter(e => (sendPlatform==='youtube'?(e.source==='yt'||e.source==='7tv'||e.source==='bttv'):e.source!=='yt') && e.name.toLowerCase().includes(q)).slice(0, 12);
   if(matches.length === 0){ closeAc(); return; }
+  acTabMatches = matches; // cache for Tab cycling
   acSelectedIndex = -1;
   ac.innerHTML = '';
   matches.forEach((e, i) => {
@@ -1784,7 +1820,7 @@ function moveAcSelection(dir){
   items[acSelectedIndex].scrollIntoView({block:'nearest'});
 }
 
-function commitAc(name){
+function commitAc(name, fromTab=false){
   const inp = el('chatInput');
   const val = inp.value;
   const cursor = inp.selectionStart;
@@ -1797,6 +1833,12 @@ function commitAc(name){
   inp.focus();
   inp.setSelectionRange(pos, pos);
   closeAc();
+  if(fromTab && acTabMatches.length > 1){
+    acTabIdx = acTabMatches.findIndex(m => m.name === name);
+    acTabActive = true;
+  } else {
+    acTabActive = false;
+  }
 }
 
 // Close picker when clicking outside
@@ -1857,12 +1899,12 @@ function parseTwitchMsg(line){
   const nick=(line.match(/:(\w+)!/)||[])[1]||'anon';
   const id=tags['id']||('tw-'+Date.now()+Math.random().toString(36).slice(2));
   if(twDisplayName&&(tags['display-name']||nick).toLowerCase()===twDisplayName.toLowerCase()) ownMessageIds.add(id);
-  const senderBadges=tags['badges']||'';
-  const isSenderMod=senderBadges.includes('moderator')||senderBadges.includes('broadcaster');
   const pingPattern=twDisplayName?new RegExp('@'+twDisplayName.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i'):null;
-  if(isSenderMod&&pingPattern&&pingPattern.test(match[1])) pingMessageIds.add(id);
+  if(pingPattern&&pingPattern.test(match[1])) pingMessageIds.add(id);
   const replyParentId=tags['reply-parent-msg-id']||null;
   const replyParentUser=tags['reply-parent-user-login']||tags['reply-parent-display-name']||null;
+  // Also highlight direct replies to the logged-in user
+  if(replyParentUser&&twDisplayName&&replyParentUser.toLowerCase()===twDisplayName.toLowerCase()) pingMessageIds.add(id);
   const replyParentText=tags['reply-parent-msg-body']||null;
   addMsg({id,platform:'twitch',author:tags['display-name']||nick,
     text:match[1],emotesTag:tags['emotes']||'',authorId:tags['user-id']||null,badgesTag:tags['badges']||'',badgeInfoTag:tags['badge-info']||'',replyParentId,replyParentUser,replyParentText,
@@ -1935,7 +1977,35 @@ let _loadingAlerts=false;
 
 function addAlert(alert){
   if(!alert.id) alert.id='al_'+Date.now()+Math.random().toString(36).slice(2);
-  if(alert.twId&&alerts.some(a=>a.twId===alert.twId)) return; // dedup
+  if(alert.twId&&alerts.some(a=>a.twId===alert.twId)) return; // exact dedup by id
+  // Fuzzy dedup: same type + same user within 30s (catches IRC vs SE duplicates for raids/subs)
+  const DEDUP_WIN=30000;
+  if(['raid','sub','resub'].includes(alert.type)){
+    if(alerts.some(a=>a.type===alert.type&&a.user===alert.user&&Math.abs(alert.ts-a.ts)<DEDUP_WIN)) return;
+  }
+  // Gift sub individuals: fold into existing mystery_gift instead of separate rows
+  if(alert.type==='gift_sub'){
+    const recipient=alert.gifted_to||alert.recipient||'';
+    if(recipient){
+      const parent=alerts.find(a=>a.type==='mystery_gift'&&a.user===alert.user&&Math.abs(alert.ts-a.ts)<DEDUP_WIN);
+      if(parent){
+        if(!parent.recipients) parent.recipients=[];
+        if(!parent.recipients.includes(recipient)) parent.recipients.push(recipient);
+        // Update the DOM element for this alert
+        const domEl=el('alertsBody')?.querySelector(`.alert-item[data-alert-id="${parent.id}"]`);
+        if(domEl){
+          const det=domEl.querySelector('.gift-recipients');
+          const list=domEl.querySelector('.gift-recipient-list');
+          if(det&&list){list.textContent=parent.recipients.join(', ');det.querySelector('summary').textContent=parent.recipients.length+' recipient'+(parent.recipients.length!==1?'s':'');}
+          else if(!det){const d=document.createElement('details');d.className='gift-recipients';d.innerHTML=`<summary>${parent.recipients.length} recipient${parent.recipients.length!==1?'s':''}</summary><div class="gift-recipient-list">${esc(parent.recipients.join(', '))}</div>`;domEl.querySelector('.alert-body')?.appendChild(d);}
+        }
+        persistAlerts();
+        return;
+      }
+    }
+    // Also deduplicate individual gift_sub to the same recipient from same gifter within 30s
+    if(recipient&&alerts.some(a=>a.type==='gift_sub'&&a.user===alert.user&&(a.gifted_to||a.recipient)===recipient&&Math.abs(alert.ts-a.ts)<DEDUP_WIN)) return;
+  }
   alerts.unshift(alert); // newest first
   if(alerts.length>200) alerts.pop();
   const body=el('alertsBody');
@@ -1945,7 +2015,6 @@ function addAlert(alert){
   const div=document.createElement('div');
   div.innerHTML=buildAlertHtml(alert,time);
   body.insertBefore(div.firstChild, body.firstChild);
-  if(!_loadingAlerts&&!el('alertsPanel').classList.contains('open')) el('alertsBadge').style.display='inline-block';
   if(!_loadingAlerts) persistAlerts();
   if(!_loadingAlerts&&isStreamer) relayAlertToRTDB(alert);
 }
@@ -1969,7 +2038,7 @@ function relayAlertToRTDB(alert){
   const key=fbKey(alert.twId||alert.id||'');
   if(!key) return;
   const data={};
-  for(const f of ['type','user','userId','ts','amount','currency','message','months','tier','count','reward','input','recipient']){
+  for(const f of ['type','user','userId','ts','amount','currency','message','months','tier','count','reward','input','recipient','gifted_to','recipients']){
     if(alert[f]!=null) data[f]=alert[f];
   }
   fbAlertRef.child(key).set(data);
@@ -1986,7 +2055,6 @@ function subscribeRTDBAlerts(){
     const hasNew=alerts.some(a=>!prevIds.has(a.twId));
     reorderAlerts();
     persistAlerts();
-    if(hasNew&&!el('alertsPanel').classList.contains('open')) el('alertsBadge').style.display='inline-block';
   },err=>console.error('[RTDB] on(value) error:',err));
 }
 async function fetchTwitchAlertHistory(){
@@ -2102,7 +2170,8 @@ function buildAlertHtml(a,time){
     case 'gift_sub':
       title=`<b>${esc(a.user)}</b> gifted a ${fmtTier(a.tier)} sub to <b>${esc(a.gifted_to)}</b>!`; break;
     case 'mystery_gift':
-      title=`<b>${esc(a.user)}</b> gifted ${a.count} ${fmtTier(a.tier)} sub${a.count!==1?'s':''} to the community!`; break;
+      title=`<b>${esc(a.user)}</b> gifted ${a.count} ${fmtTier(a.tier)} sub${a.count!==1?'s':''} to the community!`;
+      break;
     case 'raid':
       title=`<b>${esc(a.user)}</b> raided with ${Number(a.count||0).toLocaleString()} viewer${(a.count||0)!==1?'s':''}!`; break;
     case 'host':
@@ -2120,11 +2189,15 @@ function buildAlertHtml(a,time){
   }
   const clickable=a.type!=='tip'&&a.type!=='cheer'&&a.user;
   const onclick=clickable?` onclick="openTwitchChatter('${esc(a.userId||'')}','${esc(a.user)}');" style="cursor:pointer"`:'';
-  return `<div class="alert-item ${esc(a.type)}"${onclick}>
+  const recipientsHtml=(a.type==='mystery_gift'&&a.recipients&&a.recipients.length)
+    ?`<details class="gift-recipients"><summary>${a.recipients.length} recipient${a.recipients.length!==1?'s':''}</summary><div class="gift-recipient-list">${esc(a.recipients.join(', '))}</div></details>`
+    :'';
+  return `<div class="alert-item ${esc(a.type)}" data-alert-id="${esc(a.id)}"${onclick}>
     <span class="alert-icon">${icon}</span>
     <div class="alert-body">
       <div class="alert-title">${title}</div>
       ${sub?`<div class="alert-msg">${esc(sub)}</div>`:''}
+      ${recipientsHtml}
     </div>
     <span class="alert-time">${esc(time)}</span>
   </div>`;
@@ -2413,7 +2486,7 @@ function buildMsg(msg){
   const isMod=mode==='mod';
   const renderedText=msg.platform==='youtube'?renderYtText(msg.text,msg.runs):renderMsgText(msg.text,msg.emotesTag||'');
   const badgesHtml = buildBadgeImgs(msg);
-  const replyBar = msg.replyParentId ? `<div class="msg-reply-bar" data-scrollto="${esc(msg.replyParentId)}"><span class="msg-reply-author">@${esc(msg.replyParentUser||'?')}</span><span class="msg-reply-text">${esc((msg.replyParentText||'').replace(/\\\\s/g,' ').slice(0,80))}</span></div>` : '';
+  const replyBar = msg.replyParentId ? `<div class="msg-reply-bar" data-scrollto="${esc(msg.replyParentId)}"><span class="msg-reply-author">@${esc(msg.replyParentUser||'?')}</span><span class="msg-reply-text">${esc((msg.replyParentText||'').replace(/\\s/g,' ').slice(0,80))}</span></div>` : '';
   const announceTag = isAnnounce ? `<span class="announce-tag" style="background:${msg.announcementColor}22;color:${msg.announcementColor};border:1px solid ${msg.announcementColor}44">📣</span>` : '';
   const superBadge = isSuper&&msg.superAmount ? `<span class="super-amount">${esc(msg.superAmount)}</span>` : '';
   const delLabel=isDel?(delBy?` (Deleted by ${esc(delBy)})`:' (Deleted by a moderator)'):'';
@@ -2857,7 +2930,7 @@ async function fetchTwitchProfile(msg) {
     const created = new Date(user.created_at);
     const createdStr = created.toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
     const followedStr = followed ? new Date(followed.followed_at).toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'}) : null;
-    const isMod = mode === 'mod';
+    const isMod = !!twToken; // show mod actions for any logged-in user, not just mod mode
 
     const subMonths = (() => {
       const bm = messages.filter(x=>x.platform==='twitch'&&x.author===msg.author&&x.badgeInfoTag).pop();
@@ -3848,7 +3921,6 @@ function resetSession(){
   el('alertsPanel').classList.remove('open');
   el('alertsBtn').classList.remove('active');
   document.body.classList.remove('alerts-open');
-  el('alertsBadge').style.display='none';
   el('alertsEmpty').style.display='flex';
   [...el('alertsBody').querySelectorAll('.alert-item')].forEach(e=>e.remove());
   if(window.electronAPI?.overlayMsg) window.electronAPI.overlayMsg({type:'clear'});
