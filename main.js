@@ -690,7 +690,7 @@ ipcMain.handle('yt:delete', async (_, { msgId, authorId, text }) => {
       );
       for (const c of containers) {
         const items = [...c.querySelectorAll('tp-yt-paper-item, ytd-menu-service-item-renderer')];
-        const hit = items.find(i => /remove/i.test(i.textContent));
+        const hit = items.find(i => /remove|supprimer/i.test(i.textContent));
         if (hit) {
           const r = hit.getBoundingClientRect();
           if (r.width && r.height) return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
@@ -739,21 +739,29 @@ async function ytModAction(channelId, actionLabel) {
       { timeout: 3000 }
     );
 
+    // Build multilingual regex pattern for the action label
+    const labelPatterns = {
+      timeout: 'timeout|bloquer temporairement',
+      ban: 'hide user|masquer l.utilisateur',
+    };
+    const labelPattern = labelPatterns[actionLabel.toLowerCase()] || actionLabel;
+
     // Find and click the matching action button
-    const clicked = await ytPage.evaluate((label) => {
+    const clicked = await ytPage.evaluate((pattern) => {
+      const re = new RegExp(pattern, 'i');
       // Try action panel buttons first
       const panel = document.querySelector('yt-live-chat-user-info-panel');
       if (panel) {
         const btns = [...panel.querySelectorAll('button, tp-yt-paper-button, yt-button-renderer')];
-        const btn = btns.find(b => b.textContent.trim().toLowerCase().includes(label.toLowerCase()));
+        const btn = btns.find(b => re.test(b.textContent));
         if (btn) { btn.click(); return true; }
       }
       // Try popup menu items
       const items = [...document.querySelectorAll('tp-yt-paper-item, ytd-menu-service-item-renderer')];
-      const item = items.find(i => i.textContent.trim().toLowerCase().includes(label.toLowerCase()));
+      const item = items.find(i => re.test(i.textContent));
       if (item) { item.click(); return true; }
       return false;
-    }, actionLabel);
+    }, labelPattern);
 
     if (!clicked) return { ok: false, error: `Could not find "${actionLabel}" action in the menu` };
 
@@ -761,7 +769,7 @@ async function ytModAction(channelId, actionLabel) {
     await new Promise(r => setTimeout(r, 500));
     await ytPage.evaluate(() => {
       const confirmBtns = [...document.querySelectorAll('button, tp-yt-paper-button')];
-      const confirm = confirmBtns.find(b => /confirm|ok|yes|submit/i.test(b.textContent));
+      const confirm = confirmBtns.find(b => /confirm|ok|yes|submit|confirmer|oui/i.test(b.textContent));
       if (confirm) confirm.click();
     });
 
