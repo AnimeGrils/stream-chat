@@ -3945,7 +3945,11 @@ if(window.electronAPI){
     } else if(data.type === 'available'){
       // Show update banner
       el('updateBannerTitle').textContent = `Update Available — v${data.version}`;
-      el('updateBannerBody').textContent = 'A new version is ready to download.';
+      let notes = data.releaseNotes || '';
+      if(Array.isArray(notes)) notes = notes.map(n=>n.note||'').join('\n');
+      // Strip HTML tags if release notes are in HTML format
+      notes = notes.replace(/<[^>]*>/g,' ').replace(/\s{2,}/g,' ').trim();
+      el('updateBannerBody').textContent = notes || 'A new version is ready to download.';
       el('updateInstallBtn').textContent = 'Download & Install';
       updateDownloaded = false;
       banner.classList.add('visible');
