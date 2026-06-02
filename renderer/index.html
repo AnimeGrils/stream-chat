@@ -119,6 +119,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
 .del-label{font-size:11px;margin-left:2px}
 .msg.msg-ping{background:rgba(255,170,68,.22)}
 .msg.msg-announcement{background:rgba(145,70,255,.07)}
+.msg.msg-first-chat{background:rgba(0,200,160,.07);border-left:3px solid rgba(0,200,160,.55)!important}
+.first-chat-banner{font-size:11px;font-weight:600;color:rgba(0,200,160,.85);margin-bottom:2px;letter-spacing:.02em}
 .announce-tag{display:inline-block;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;padding:1px 5px;border-radius:3px;margin-right:5px;vertical-align:middle}
 .msg-text a.chat-link{color:var(--twitch);text-decoration:underline;text-underline-offset:2px;word-break:break-all}
 .msg-text a.chat-link:hover{color:var(--text)}
@@ -1922,7 +1924,7 @@ function parseTwitchMsg(line){
   const replyParentText=tags['reply-parent-msg-body']||null;
   addMsg({id,platform:'twitch',author:tags['display-name']||nick,
     text:match[1],emotesTag:tags['emotes']||'',authorId:tags['user-id']||null,badgesTag:tags['badges']||'',badgeInfoTag:tags['badge-info']||'',replyParentId,replyParentUser,replyParentText,
-    color:tags['color']||rndColor(nick),ts:parseInt(tags['tmi-sent-ts'])||Date.now()});
+    firstMsg:tags['first-msg']==='1',color:tags['color']||rndColor(nick),ts:parseInt(tags['tmi-sent-ts'])||Date.now()});
 }
 function parseTwitchUserNotice(line){
   const tags=parseTags(line);
@@ -2495,7 +2497,7 @@ function buildMsg(msg){
   const isPing=pingMessageIds.has(msg.id);
   const isAnnounce=!!msg.isAnnouncement;
   const isSuper=!!msg.isSuperchat;
-  div.className='msg '+(msg.platform==='twitch'?'tw':'yt')+(isPing?' msg-ping':'')+(isAnnounce?' msg-announcement':'')+(isSuper?' yt-super':'');
+  div.className='msg '+(msg.platform==='twitch'?'tw':'yt')+(isPing?' msg-ping':'')+(isAnnounce?' msg-announcement':'')+(isSuper?' yt-super':'')+(msg.firstMsg?' msg-first-chat':'');
   if(isAnnounce && msg.announcementColor) div.style.borderLeftColor=msg.announcementColor;
   div.dataset.id=msg.id;
   const t=new Date(msg.ts);
@@ -2508,10 +2510,11 @@ function buildMsg(msg){
   const replyBar = msg.replyParentId ? `<div class="msg-reply-bar" data-scrollto="${esc(msg.replyParentId)}"><span class="msg-reply-author">@${esc(msg.replyParentUser||'?')}</span><span class="msg-reply-text">${esc((msg.replyParentText||'').replace(/\\s/g,' ').slice(0,80))}</span></div>` : '';
   const announceTag = isAnnounce ? `<span class="announce-tag" style="background:${msg.announcementColor}22;color:${msg.announcementColor};border:1px solid ${msg.announcementColor}44">📣</span>` : '';
   const superBadge = isSuper&&msg.superAmount ? `<span class="super-amount">${esc(msg.superAmount)}</span>` : '';
+  const firstChatBanner = msg.firstMsg ? `<div class="first-chat-banner">✨ First-time chatter</div>` : '';
   const delLabel=isDel?(delBy?` (Deleted by ${esc(delBy)})`:' (Deleted by a moderator)'):'';
   div.innerHTML=
     `<span class="msg-time">${time}</span>`+
-    `<div class="msg-body">${replyBar}${announceTag}${badgesHtml}<span class="msg-author" style="color:${msg.color}" data-msgid="${esc(msg.id)}">${esc(msg.author)}</span><span class="msg-sep">:</span>${superBadge}<span class="msg-text">${renderedText}</span><span class="del-label">${delLabel}</span></div>`;
+    `<div class="msg-body">${firstChatBanner}${replyBar}${announceTag}${badgesHtml}<span class="msg-author" style="color:${msg.color}" data-msgid="${esc(msg.id)}">${esc(msg.author)}</span><span class="msg-sep">:</span>${superBadge}<span class="msg-text">${renderedText}</span><span class="del-label">${delLabel}</span></div>`;
   return div;
 }
 
@@ -3082,6 +3085,12 @@ el('chatArea').addEventListener('click', e => {
   if (author) {
     const id = author.dataset.msgid;
     if (id) openProfile(id);
+    return;
+  }
+  const link = e.target.closest('a.chat-link');
+  if (link) {
+    e.preventDefault();
+    window.electronAPI?.openExternal(link.href);
     return;
   }
 });
