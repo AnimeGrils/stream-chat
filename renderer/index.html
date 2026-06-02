@@ -604,7 +604,7 @@ body.alerts-open .profile-panel.open.shift{right:calc(var(--alerts-w,360px) + va
   <div class="alerts-panel" id="alertsPanel">
     <div class="panel-resizer" data-panel="alertsPanel" data-var="--alerts-w"></div>
     <div class="ap-header"><span class="ap-title">🔔 Alerts</span><button class="ap-refresh" onclick="refreshAlerts()" title="Refresh">↻</button><button class="ap-close" onclick="toggleAlertsPanel()" title="Close">✕</button></div>
-    <div class="ap-filters" id="apFilters"><button class="ap-filter active" data-type="all" onclick="setAlertFilter(this,'all')">All</button><button class="ap-filter" data-type="follow" onclick="setAlertFilter(this,'follow')">Follow</button><button class="ap-filter" data-type="sub" onclick="setAlertFilter(this,'sub')">Sub</button><button class="ap-filter" data-type="raid" onclick="setAlertFilter(this,'raid')">Raid</button><button class="ap-filter" data-type="redeem" onclick="setAlertFilter(this,'redeem')">Redeem</button><button class="ap-filter" data-type="cheer" onclick="setAlertFilter(this,'cheer')">Cheer</button><button class="ap-filter" data-type="tip" onclick="setAlertFilter(this,'tip')">Tip</button></div>
+    <div class="ap-filters" id="apFilters"><button class="ap-filter active" data-type="all" onclick="setAlertFilter(this,'all')">All</button><button class="ap-filter" data-type="follow" onclick="setAlertFilter(this,'follow')">Follow</button><button class="ap-filter" data-type="sub" onclick="setAlertFilter(this,'sub')">Sub</button><button class="ap-filter" data-type="raid" onclick="setAlertFilter(this,'raid')">Raid</button><button class="ap-filter" data-type="redeem" onclick="setAlertFilter(this,'redeem')">Redeem</button><button class="ap-filter" data-type="cheer" onclick="setAlertFilter(this,'cheer')">Cheer</button><button class="ap-filter" data-type="tip" onclick="setAlertFilter(this,'tip')">Tip</button><button class="ap-filter" data-type="superchat" onclick="setAlertFilter(this,'superchat')">Superchat</button><button class="ap-filter" data-type="yt_member" onclick="setAlertFilter(this,'yt_member')">Member</button></div>
     <div class="ap-body" id="alertsBody">
       <div class="alerts-empty" id="alertsEmpty">
         <div style="font-size:28px;opacity:.3">🔔</div>
@@ -783,7 +783,7 @@ let ytHistoricalTimer=null;
 let sendPlatform='twitch';
 let alerts=[]; let eventSubWs=null;
 let replyToMsg=null; // message being replied to
-let alertTypeFilter='all';
+let alertTypeFilters=new Set(); // empty = show all
 
 // Emote storage
 // twitchEmotes: Map<name, {id, url}>
@@ -932,9 +932,16 @@ function chatFontAdj(delta){
   localStorage.setItem('sc_chatFontSz',next);
 }
 function setAlertFilter(btn,type){
-  alertTypeFilter=type;
-  el('apFilters').querySelectorAll('.ap-filter').forEach(b=>b.classList.remove('active'));
-  btn.classList.add('active');
+  if(type==='all'){
+    alertTypeFilters.clear();
+  } else {
+    if(alertTypeFilters.has(type)) alertTypeFilters.delete(type);
+    else alertTypeFilters.add(type);
+  }
+  el('apFilters').querySelectorAll('.ap-filter').forEach(b=>{
+    const t=b.dataset.type;
+    b.classList.toggle('active', t==='all' ? alertTypeFilters.size===0 : alertTypeFilters.has(t));
+  });
   reorderAlerts();
 }
 function refreshAlerts(){
@@ -2163,9 +2170,9 @@ function reorderAlerts(){
   alerts.sort((a,b)=>b.ts-a.ts);
   const body=el('alertsBody');
   [...body.querySelectorAll('.alert-item')].forEach(e=>e.remove());
-  const toShow=alertTypeFilter==='all'?alerts:alerts.filter(a=>{
-    if(alertTypeFilter==='sub') return a.type==='sub'||a.type==='resub'||a.type==='gift_sub'||a.type==='mystery_gift';
-    return a.type===alertTypeFilter;
+  const toShow=alertTypeFilters.size===0?alerts:alerts.filter(a=>{
+    if(alertTypeFilters.has('sub')&&(a.type==='sub'||a.type==='resub'||a.type==='gift_sub'||a.type==='mystery_gift')) return true;
+    return alertTypeFilters.has(a.type);
   });
   el('alertsEmpty').style.display=toShow.length?'none':'flex';
   for(let i=0;i<toShow.length;i++){
