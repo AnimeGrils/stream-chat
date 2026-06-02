@@ -399,6 +399,8 @@ body.alerts-open .profile-panel.open.shift{right:calc(var(--alerts-w,360px) + va
 .alert-item.tip{border-left-color:#4caf50}
 .alert-item.cheer{border-left-color:#ffd700}
 .alert-item.host{border-left-color:var(--muted)}
+.alert-item.superchat{border-left-color:#ffd600}
+.alert-item.yt_member{border-left-color:#0f9d58}
 @keyframes alertGlow{0%,71%{background:rgba(145,70,255,.45);box-shadow:inset 0 0 0 1px rgba(145,70,255,.9),0 0 12px rgba(145,70,255,.5)}100%{background:transparent;box-shadow:none}}
 .alert-item.alert-new{animation:alertGlow 7s ease-out forwards}
 .alert-icon{font-size:16px;flex-shrink:0;margin-top:1px}
@@ -1330,6 +1332,9 @@ if(window.electronAPI){
       if(newYtEmote&&el('emotePicker').classList.contains('open')) renderEmoteGrid();
     }
     addMsg(msg);
+    if(msg.isSuperchat && msg.superAmount && msg.isLive!==false){
+      addAlert({id:'ytsc_'+msg.id,type:'superchat',user:msg.author,amount:msg.superAmount,message:msg.text||'',ts:msg.ts});
+    }
     // Historical messages are held back from the overlay until the batch finishes,
     // then we do a clean timestamp-ordered replay of everything.
     if(msg.isLive===false){
@@ -1345,6 +1350,9 @@ if(window.electronAPI){
     setTimeout(()=>{
       if(fbRef && !deletedIds.get(fbKey(id))) fbRef.child(fbKey(id)).set(true).catch(()=>{});
     }, 2000);
+  });
+  window.electronAPI.onYoutubeMembership(data=>{
+    if(data.isLive!==false) addAlert({id:'ytmem_'+data.id,type:'yt_member',user:data.author,tier:data.tier||'',message:data.message||'',ts:data.ts});
   });
   window.electronAPI.onYoutubeStatus(({status,detail})=>{
     if(status==='connected') dot('d-yt','ok');
@@ -2179,7 +2187,7 @@ function fmtAlertTime(ts){
   return d.toLocaleDateString([],{month:'short',day:'numeric',year:'numeric'})+' '+t;
 }
 function buildAlertHtml(a,time){
-  const icons={follow:'❤️',sub:'🟣',resub:'🟣',gift_sub:'🎁',mystery_gift:'🎁',raid:'🚀',redeem:'⭐',tip:'💸',cheer:'💎',host:'📡'};
+  const icons={follow:'❤️',sub:'🟣',resub:'🟣',gift_sub:'🎁',mystery_gift:'🎁',raid:'🚀',redeem:'⭐',tip:'💸',cheer:'💎',host:'📡',superchat:'💛',yt_member:'🌟'};
   const icon=icons[a.type]||'🔔';
   let title='',sub='';
   switch(a.type){
@@ -2206,9 +2214,15 @@ function buildAlertHtml(a,time){
     case 'redeem':
       title=`<b>${esc(a.user)}</b> redeemed <b>${esc(a.reward)}</b>`;
       if(a.input) sub=a.input; break;
+    case 'superchat':
+      title=`<b>${esc(a.user)}</b> superchatted <b>${esc(String(a.amount))}</b>`;
+      if(a.message) sub=a.message; break;
+    case 'yt_member':
+      title=`<b>${esc(a.user)}</b> became a member!`;
+      sub=a.message||a.tier||''; break;
     default: title=esc(a.type);
   }
-  const clickable=a.type!=='tip'&&a.type!=='cheer'&&a.user;
+  const clickable=a.type!=='tip'&&a.type!=='cheer'&&a.type!=='superchat'&&a.type!=='yt_member'&&a.user;
   const onclick=clickable?` onclick="openTwitchChatter('${esc(a.userId||'')}','${esc(a.user)}');" style="cursor:pointer"`:'';
   const recipientsHtml=(a.type==='mystery_gift'&&a.recipients&&a.recipients.length)
     ?`<details class="gift-recipients"><summary>${a.recipients.length} recipient${a.recipients.length!==1?'s':''}</summary><div class="gift-recipient-list">${esc(a.recipients.join(', '))}</div></details>`

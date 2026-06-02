@@ -57,6 +57,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('yt:message', (_, msg) => cb(msg));
   },
 
+  // Called when a YouTube membership/new member event is detected
+  onYoutubeMembership: (cb) => {
+    ipcRenderer.on('yt:membership', (_, data) => cb(data));
+  },
+
   // Called when YouTube connection status changes
   onYoutubeStatus: (cb) => {
     ipcRenderer.on('yt:status', (_, status) => cb(status));

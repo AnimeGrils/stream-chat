@@ -205,6 +205,10 @@ function sendMessage(msg) {
   if (mainWindow) mainWindow.webContents.send('yt:message', msg);
 }
 
+function sendMembership(data) {
+  if (mainWindow) mainWindow.webContents.send('yt:membership', data);
+}
+
 function sendDeletion(id) {
   if (mainWindow) mainWindow.webContents.send('yt:deleted', id);
 }
@@ -251,6 +255,10 @@ async function injectChatObserver(page) {
     sendDeletion(id);
   });
 
+  await page.exposeFunction('onYTMembership', (data) => {
+    sendMembership(data);
+  });
+
   await page.evaluate(() => {
     // Wait for chat container to appear
     function observe() {
@@ -269,6 +277,7 @@ async function injectChatObserver(page) {
       // Process existing messages in DOM order — index preserves ordering
       container.querySelectorAll('yt-live-chat-text-message-renderer').forEach(el => processMsg(el, seen, msgIndex++, false));
       container.querySelectorAll('yt-live-chat-paid-message-renderer').forEach(el => processPaidMsg(el, seen, msgIndex++, false));
+      container.querySelectorAll('yt-live-chat-membership-item-renderer').forEach(el => processMembershipMsg(el, seen, msgIndex++, false));
 
       const observer = new MutationObserver(mutations => {
         mutations.forEach(m => {
@@ -284,6 +293,10 @@ async function injectChatObserver(page) {
               processPaidMsg(node, seen, msgIndex++, true);
             }
             node.querySelectorAll && node.querySelectorAll('yt-live-chat-paid-message-renderer').forEach(el => processPaidMsg(el, seen, msgIndex++, true));
+            if (node.tagName && node.tagName.toLowerCase() === 'yt-live-chat-membership-item-renderer') {
+              processMembershipMsg(node, seen, msgIndex++, true);
+            }
+            node.querySelectorAll && node.querySelectorAll('yt-live-chat-membership-item-renderer').forEach(el => processMembershipMsg(el, seen, msgIndex++, true));
           });
         });
       });
@@ -428,6 +441,28 @@ async function injectChatObserver(page) {
         isSuperchat: true, superAmount: amount, superColor: headerBg,
         ts, runs: []
       });
+    }
+
+    function processMembershipMsg(el, seen, index, isLive) {
+      const id = el.getAttribute('id') || ('member-' + Math.random().toString(36).slice(2));
+      if (seen.has(id)) return;
+      seen.add(id);
+      const authorEl = el.querySelector('#author-name');
+      const author = authorEl ? authorEl.textContent.trim() : '';
+      if (!author) return;
+      // Debug: log all child element IDs and text so we can verify selectors
+      const debugChildren = [...el.querySelectorAll('*')]
+        .filter(c => c.id)
+        .map(c => `#${c.id}: "${c.textContent.trim().slice(0, 60)}"`)
+        .join(' | ');
+      console.log('[YT Membership] author:', author, '| children:', debugChildren);
+      // #header-primary-text holds the tier/level name; #header-subtext is fallback
+      const tierEl = el.querySelector('#header-primary-text') || el.querySelector('#header-subtext');
+      const tier = tierEl ? tierEl.textContent.trim() : '';
+      // Milestone members can include a comment
+      const msgEl = el.querySelector('#message');
+      const message = msgEl ? msgEl.textContent.trim() : '';
+      window.onYTMembership({ id, author, tier, message, isLive, ts: Date.now() });
     }
 
     observe();
