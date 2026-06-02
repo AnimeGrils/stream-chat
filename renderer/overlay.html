@@ -192,7 +192,8 @@ function buildEl(msg) {
 
   const authorEl = document.createElement('span');
   authorEl.className = 'author';
-  authorEl.textContent = msg.author || '';
+  const fullName = msg.author || '';
+  authorEl.textContent = fullName.length > 15 ? fullName.slice(0, 15) + '…' : fullName;
   authorEl.style.color = msg.color || (isTw ? '#bf94ff' : '#ff7070');
   div.appendChild(authorEl);
 
