@@ -1134,7 +1134,9 @@ async function checkActivePoll(){
         if(ep&&ep.status!=='ACTIVE'){activePoll=ep;renderPoll(ep,true);if(!pollEndTimeout)pollEndTimeout=setTimeout(dismissPoll,30000);}
       }catch(e){}
     }
-  }catch(e){}
+  }catch(e){
+    if(e.status===401||e.status===403) stopPollPolling();
+  }
 }
 function renderPoll(poll,ended){
   if(pollDismissed) return;
@@ -1226,7 +1228,7 @@ async function twFetch(url,opts={}){
 async function bcFetch(url,opts={}){
   if(!twBcToken) throw new Error('Broadcaster token not set — add one in Settings.');
   const r=await fetch(url,{...opts,headers:{'Authorization':`Bearer ${twBcToken}`,'Client-Id':cfg.twCid||'',...(opts.headers||{})}});
-  if(!r.ok){const j=await r.json().catch(()=>({}));throw new Error(j.message||r.status);}
+  if(!r.ok){const j=await r.json().catch(()=>({}));const e=new Error(j.message||r.status);e.status=r.status;throw e;}
   if(r.status===204) return {};
   return r.json();
 }
