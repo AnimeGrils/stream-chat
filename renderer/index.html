@@ -96,7 +96,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
 .bn-err{background:rgba(255,68,68,.04);border-bottom:1px solid rgba(255,68,68,.1);color:rgba(200,120,120,.8)}
 
 /* ── CHAT AREA ── */
-.chat-area{flex:1;overflow-y:auto;padding:8px 0}
+.chat-area{flex:1;overflow-y:auto;overflow-x:hidden;padding:8px 0}
 .chat-area::-webkit-scrollbar{width:4px}
 .chat-area::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
 .msg{display:flex;align-items:baseline;gap:8px;padding:3px 14px;font-size:var(--chat-font-size, 13px);line-height:1.6;border-left:2px solid transparent;transition:background .1s}
@@ -118,6 +118,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
 .msg.msg-deleted .msg-text{text-decoration:line-through}
 .del-label{font-size:11px;margin-left:2px}
 .msg.msg-ping{background:rgba(255,170,68,.22)}
+.msg.msg-drag-delete{background:rgba(220,50,50,.2)!important;border-left-color:var(--del)!important}
 .msg.msg-announcement{background:rgba(145,70,255,.07)}
 .msg.msg-first-chat{background:rgba(0,200,160,.07);border-left:3px solid rgba(0,200,160,.55)!important}
 .first-chat-banner{font-size:11px;font-weight:600;color:rgba(0,200,160,.85);margin-bottom:2px;letter-spacing:.02em}
@@ -3114,6 +3115,42 @@ el('chatArea').addEventListener('click', e => {
     window.electronAPI?.openExternal(link.href);
     return;
   }
+});
+
+// Middle-click drag right to delete a chat message
+let _midDrag=null;
+const MID_DRAG_THRESHOLD=100;
+el('chatArea').addEventListener('mousedown',e=>{
+  if(e.button!==1) return;
+  e.preventDefault(); // prevent browser scroll-mode cursor
+  const msgEl=e.target.closest('.msg');
+  if(!msgEl) return;
+  const id=msgEl.dataset.id;
+  if(deletedIds.has(fbKey(id))) return; // don't drag already-deleted messages
+  const msg=messages.find(m=>m.id===id);
+  if(!msg) return;
+  _midDrag={msgEl,id,platform:msg.platform,authorId:msg.authorId||'',text:msg.text||'',startX:e.clientX};
+  msgEl.style.transition='none';
+  msgEl.style.userSelect='none';
+});
+document.addEventListener('mousemove',e=>{
+  if(!_midDrag) return;
+  const dx=Math.max(0,e.clientX-_midDrag.startX);
+  _midDrag.msgEl.style.transform=`translateX(${dx}px)`;
+  _midDrag.msgEl.classList.toggle('msg-drag-delete',dx>=MID_DRAG_THRESHOLD);
+});
+document.addEventListener('mouseup',e=>{
+  if(!_midDrag||e.button!==1) return;
+  const dx=Math.max(0,e.clientX-_midDrag.startX);
+  const {msgEl,id,platform,authorId,text}=_midDrag;
+  _midDrag=null;
+  const triggered=dx>=MID_DRAG_THRESHOLD;
+  msgEl.classList.remove('msg-drag-delete');
+  msgEl.style.userSelect='';
+  msgEl.style.transition='transform .2s ease';
+  msgEl.style.transform='';
+  setTimeout(()=>{if(msgEl)msgEl.style.transition='';},200);
+  if(triggered) handleDelete(id,platform,null,authorId,text);
 });
 
 // Close profile panel when clicking outside
