@@ -67,6 +67,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('yt:status', (_, status) => cb(status));
   },
 
+  // Called when the YouTube window is hidden via its custom title bar
+  onYoutubeWindowHidden: (cb) => {
+    ipcRenderer.on('yt:windowHidden', () => cb());
+  },
+
   // Called when a YouTube message is detected as deleted via DOM observation
   onYoutubeDeleted: (cb) => {
     ipcRenderer.on('yt:deleted', (_, id) => cb(id));
@@ -77,6 +82,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.removeAllListeners('yt:message');
     ipcRenderer.removeAllListeners('yt:status');
     ipcRenderer.removeAllListeners('yt:deleted');
+    ipcRenderer.removeAllListeners('yt:windowHidden');
     ipcRenderer.removeAllListeners('se:alert');
     ipcRenderer.removeAllListeners('se:channelId');
   },

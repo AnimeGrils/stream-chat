@@ -1370,6 +1370,10 @@ if(window.electronAPI){
     else if(status==='error'){ dot('d-yt','err'); if(detail) flashErr('YouTube: '+detail); }
     else dot('d-yt','');
   });
+  window.electronAPI.onYoutubeWindowHidden(()=>{
+    ytWindowShown=false;
+    el('show-yt-btn').textContent='show window';
+  });
 }
 
 // ═══════ DELETE ═══════

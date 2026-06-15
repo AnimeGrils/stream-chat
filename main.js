@@ -2,11 +2,9 @@ const { app, BrowserWindow, ipcMain, session } = require('electron');
 const path = require('path');
 const http = require('http');
 const fs = require('fs');
-const puppeteer = require('puppeteer-core');
 
 let mainWindow = null;
-let ytBrowser = null;
-let ytPage = null;
+let ytWin = null;
 let ytObserverActive = false;
 let ytStatus = 'disconnected'; // 'disconnected' | 'connecting' | 'connected' | 'error'
 
@@ -194,7 +192,7 @@ app.on('activate', () => {
   if (!mainWindow) createWindow();
 });
 
-// ═══════ YOUTUBE SCRAPER ═════════════════════════════════════════════
+// ═══════ YOUTUBE EMBEDDED WINDOW ════════════════════════════════════
 
 function sendStatus(status, detail) {
   ytStatus = status;
@@ -213,15 +211,75 @@ function sendDeletion(id) {
   if (mainWindow) mainWindow.webContents.send('yt:deleted', id);
 }
 
+// Forward IPC messages sent by yt-preload.js to the main window
+ipcMain.on('yt:fwd:message', (event, msg) => {
+  if (ytWin && event.sender === ytWin.webContents) sendMessage(msg);
+});
+ipcMain.on('yt:fwd:deleted', (event, id) => {
+  if (ytWin && event.sender === ytWin.webContents) sendDeletion(id);
+});
+ipcMain.on('yt:fwd:membership', (event, data) => {
+  if (ytWin && event.sender === ytWin.webContents) sendMembership(data);
+});
+ipcMain.on('yt:fwd:hide', (event) => {
+  if (ytWin && !ytWin.isDestroyed() && event.sender === ytWin.webContents) {
+    notifyYtWindowHidden();
+    ytWin.hide();
+  }
+});
+
+function createYtWindow() {
+  ytWin = new BrowserWindow({
+    show: false,
+    width: 520,
+    height: 700,
+    frame: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'yt-preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      partition: 'persist:youtube',
+    },
+  });
+  // Alt+F4 / system close — hide instead of destroy
+  ytWin.on('close', (event) => { event.preventDefault(); notifyYtWindowHidden(); ytWin.hide(); });
+  ytWin.on('closed', () => { ytWin = null; ytObserverActive = false; });
+}
+
+function notifyYtWindowHidden() {
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('yt:windowHidden');
+}
+
 async function closeYoutubeChat() {
   ytObserverActive = false;
-  if (ytBrowser) {
-    try { await ytBrowser.close(); } catch {}
-    ytBrowser = null;
-    ytPage = null;
+  if (ytWin && !ytWin.isDestroyed()) {
+    try { ytWin.destroy(); } catch {}
+    ytWin = null;
   }
   sendStatus('disconnected');
 }
+
+// Run JS in the YT window's page context
+function ytExec(js) {
+  if (!ytWin || ytWin.isDestroyed()) return Promise.reject(new Error('YouTube window not open'));
+  return ytWin.webContents.executeJavaScript(js);
+}
+
+// Poll until js expression returns truthy, or timeout
+async function ytWaitFor(js, timeout) {
+  timeout = timeout || 10000;
+  const deadline = Date.now() + timeout;
+  while (Date.now() < deadline) {
+    try {
+      const r = await ytExec(js);
+      if (r) return r;
+    } catch {}
+    await new Promise(r => setTimeout(r, 500));
+  }
+  return null;
+}
+
+// ═══════ IPC HANDLERS ════════════════════════════════════════════════
 
 // Resolve input to a YouTube live chat URL
 // Accepts: full youtube.com/watch?v=... URL, youtu.be/... short URL,
@@ -245,380 +303,85 @@ async function resolveYoutubeChatUrl(input) {
   return { channelUrl: `https://www.youtube.com/${handle}/live`, needsExtract: true };
 }
 
-// Inject MutationObserver into the YouTube live chat page
-async function injectChatObserver(page) {
-  await page.exposeFunction('onYTChatMessage', (msg) => {
-    sendMessage(msg);
-  });
-
-  await page.exposeFunction('onYTChatDeleted', (id) => {
-    sendDeletion(id);
-  });
-
-  await page.exposeFunction('onYTMembership', (data) => {
-    sendMembership(data);
-  });
-
-  await page.evaluate(() => {
-    // Wait for chat container to appear
-    function observe() {
-      const container =
-        document.querySelector('yt-live-chat-item-list-renderer #items') ||
-        document.querySelector('#items.yt-live-chat-item-list-renderer');
-
-      if (!container) {
-        setTimeout(observe, 1000);
-        return;
-      }
-
-      const seen = new Set();
-      let msgIndex = 0;
-
-      // Process existing messages in DOM order — index preserves ordering
-      container.querySelectorAll('yt-live-chat-text-message-renderer').forEach(el => processMsg(el, seen, msgIndex++, false));
-      container.querySelectorAll('yt-live-chat-paid-message-renderer').forEach(el => processPaidMsg(el, seen, msgIndex++, false));
-      container.querySelectorAll('yt-live-chat-membership-item-renderer').forEach(el => processMembershipMsg(el, seen, msgIndex++, false));
-
-      const observer = new MutationObserver(mutations => {
-        mutations.forEach(m => {
-          m.addedNodes.forEach(node => {
-            if (node.nodeType !== 1) return;
-            // Direct message element
-            if (node.tagName && node.tagName.toLowerCase() === 'yt-live-chat-text-message-renderer') {
-              processMsg(node, seen, msgIndex++, true);
-            }
-            // Nested (sometimes wrapped)
-            node.querySelectorAll && node.querySelectorAll('yt-live-chat-text-message-renderer').forEach(el => processMsg(el, seen, msgIndex++, true));
-            if (node.tagName && node.tagName.toLowerCase() === 'yt-live-chat-paid-message-renderer') {
-              processPaidMsg(node, seen, msgIndex++, true);
-            }
-            node.querySelectorAll && node.querySelectorAll('yt-live-chat-paid-message-renderer').forEach(el => processPaidMsg(el, seen, msgIndex++, true));
-            if (node.tagName && node.tagName.toLowerCase() === 'yt-live-chat-membership-item-renderer') {
-              processMembershipMsg(node, seen, msgIndex++, true);
-            }
-            node.querySelectorAll && node.querySelectorAll('yt-live-chat-membership-item-renderer').forEach(el => processMembershipMsg(el, seen, msgIndex++, true));
-          });
-        });
-      });
-
-      observer.observe(container, { childList: true, subtree: true });
-    }
-
-    // Map from our internal message ID → DOM element, so the delete handler can find
-    // the exact element without relying on text matching or YouTube's ID attributes.
-    if (!window.__scMsgMap) window.__scMsgMap = new Map();
-
-    function processMsg(el, seen, index, isLive) {
-      // Try multiple ID sources — YouTube uses different attrs in different contexts
-      const id = el.getAttribute('id') ||
-                 el.getAttribute('data-id') ||
-                 el.getAttribute('data-item-id') ||
-                 (el.querySelector('[data-id]') && el.querySelector('[data-id]').getAttribute('data-id')) ||
-                 (Math.random().toString(36).slice(2));
-      if (seen.has(id)) return;
-      seen.add(id);
-
-      // Store a direct reference to this element keyed by our ID
-      window.__scMsgMap.set(id, el);
-
-      const authorEl = el.querySelector('#author-name');
-      const msgEl = el.querySelector('#message');
-      const badgeEl = el.querySelector('yt-live-chat-author-badge-renderer');
-      const avatarEl = el.querySelector('yt-img-shadow img, #author-photo img');
-
-      const author = authorEl ? authorEl.textContent.trim() : '';
-      // Extract text + emoji runs (emoji are <img> elements with alt text and src)
-      let text = '';
-      const runs = [];
-      if (msgEl) {
-        msgEl.childNodes.forEach(node => {
-          if (node.nodeType === 3) { // text node
-            const v = node.textContent;
-            if (v) { text += v; runs.push({type:'text', value:v}); }
-          } else if (node.nodeName === 'IMG') {
-            const alt = node.getAttribute('alt') || node.getAttribute('shared-tooltip-text') || '';
-            const src = node.src || node.getAttribute('src') || '';
-            text += alt;
-            runs.push({type:'emoji', alt, src});
-          } else {
-            const v = node.textContent;
-            if (v) { text += v; runs.push({type:'text', value:v}); }
-          }
-        });
-        text = text.trim();
-      }
-      if (!author) return;
-      if (!text) text = '[emote]'; // fallback if we still can't extract it
-
-      // Check if moderator or channel owner
-      const badgeType = badgeEl ? (badgeEl.getAttribute('type') || '') : '';
-      const isMod = badgeType === 'moderator' || badgeType === 'owner' ||
-                    !!el.querySelector('yt-live-chat-author-badge-renderer[type="moderator"]') ||
-                    !!el.querySelector('yt-live-chat-author-badge-renderer[type="owner"]');
-
-      // Get author channel ID from action menu or data attribute
-      const authorId = el.getAttribute('author-id') || el.getAttribute('data-author-id') || '';
-
-      // Live messages use Date.now() for second-level precision so they interleave
-      // correctly with Twitch messages. Historical messages (already in DOM on connect)
-      // use the parsed HH:MM timestamp to preserve their approximate original order.
-      let ts = Date.now();
-      if (!isLive) {
-        const tsText = el.querySelector('#timestamp')?.textContent?.trim();
-        if (tsText) {
-          const m = tsText.match(/(\d+):(\d+)\s*(AM|PM)?/i);
-          if (m) {
-            let h = parseInt(m[1]), min = parseInt(m[2]);
-            const ampm = (m[3] || '').toUpperCase();
-            if (ampm === 'PM' && h < 12) h += 12;
-            if (ampm === 'AM' && h === 12) h = 0;
-            const d = new Date();
-            d.setHours(h, min, 0, 0);
-            if (d.getTime() > Date.now() + 3600000) d.setDate(d.getDate() - 1);
-            ts = d.getTime() + (index || 0);
-          }
-        }
-      }
-
-      window.onYTChatMessage({
-        id,
-        author,
-        text,
-        runs,
-        authorId,
-        isMod,
-        isLive,
-        platform: 'youtube',
-        ts,
-      });
-
-      // Watch for YouTube setting is-deleted on this element (happens when any mod deletes it)
-      if (!el.hasAttribute('is-deleted')) {
-        const delObs = new MutationObserver(() => {
-          if (el.hasAttribute('is-deleted')) {
-            delObs.disconnect();
-            window.onYTChatDeleted(id);
-          }
-        });
-        delObs.observe(el, { attributes: true, attributeFilter: ['is-deleted'] });
-      }
-    }
-
-    function processPaidMsg(el, seen, index, isLive) {
-      const id = el.getAttribute('id') || el.getAttribute('data-id') || ('paid-' + Math.random().toString(36).slice(2));
-      if (seen.has(id)) return;
-      seen.add(id);
-      window.__scMsgMap.set(id, el);
-      const authorEl = el.querySelector('#author-name');
-      const msgEl = el.querySelector('#message');
-      const amountEl = el.querySelector('#purchase-amount');
-      const author = authorEl ? authorEl.textContent.trim() : '';
-      if (!author) return;
-      const amount = amountEl ? amountEl.textContent.trim() : '';
-      let text = '';
-      if (msgEl) text = msgEl.textContent.trim();
-      const headerBg = el.getAttribute('header-background-color') || el.style.getPropertyValue('--yt-live-chat-paid-message-primary-color') || '';
-      const authorId = el.getAttribute('author-id') || el.getAttribute('data-author-id') || '';
-      let ts = Date.now();
-      if (!isLive) {
-        const tsText = el.querySelector('#timestamp')?.textContent?.trim();
-        if (tsText) {
-          const m = tsText.match(/(\d+):(\d+)\s*(AM|PM)?/i);
-          if (m) {
-            let h = parseInt(m[1]), min = parseInt(m[2]);
-            const ampm = (m[3] || '').toUpperCase();
-            if (ampm === 'PM' && h < 12) h += 12;
-            if (ampm === 'AM' && h === 12) h = 0;
-            const d = new Date(); d.setHours(h, min, 0, 0);
-            if (d.getTime() > Date.now()) d.setDate(d.getDate() - 1);
-            ts = d.getTime();
-          }
-        }
-      }
-      window.onYTChatMessage({
-        id, author, text, authorId,
-        isMod: false, isLive, platform: 'youtube',
-        isSuperchat: true, superAmount: amount, superColor: headerBg,
-        ts, runs: []
-      });
-    }
-
-    function processMembershipMsg(el, seen, index, isLive) {
-      const id = el.getAttribute('id') || ('member-' + Math.random().toString(36).slice(2));
-      if (seen.has(id)) return;
-      seen.add(id);
-      const authorEl = el.querySelector('#author-name');
-      const author = authorEl ? authorEl.textContent.trim() : '';
-      if (!author) return;
-      // Debug: log all child element IDs and text so we can verify selectors
-      const debugChildren = [...el.querySelectorAll('*')]
-        .filter(c => c.id)
-        .map(c => `#${c.id}: "${c.textContent.trim().slice(0, 60)}"`)
-        .join(' | ');
-      console.log('[YT Membership] author:', author, '| children:', debugChildren);
-      // #header-primary-text holds the tier/level name; #header-subtext is fallback
-      const tierEl = el.querySelector('#header-primary-text') || el.querySelector('#header-subtext');
-      const tier = tierEl ? tierEl.textContent.trim() : '';
-      // Milestone members can include a comment
-      const msgEl = el.querySelector('#message');
-      const message = msgEl ? msgEl.textContent.trim() : '';
-      window.onYTMembership({ id, author, tier, message, isLive, ts: Date.now() });
-    }
-
-    observe();
-  });
-}
-
-// ═══════ IPC HANDLERS ════════════════════════════════════════════════
-
 ipcMain.handle('yt:open', async (_, input) => {
-  if (ytBrowser) await closeYoutubeChat();
+  if (ytWin && !ytWin.isDestroyed()) {
+    ytObserverActive = false;
+  } else {
+    createYtWindow();
+  }
   sendStatus('connecting');
 
   try {
-    // Find the user's installed Chrome to reuse their Google login session
-    const chromePaths = {
-      win32: [
-        'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-        'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
-        process.env.LOCALAPPDATA + '\\Google\\Chrome\\Application\\chrome.exe',
-      ],
-      darwin: [
-        '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-        '/Applications/Chromium.app/Contents/MacOS/Chromium',
-      ],
-      linux: [
-        '/usr/bin/google-chrome',
-        '/usr/bin/chromium-browser',
-        '/usr/bin/chromium',
-      ],
-    };
-
-    const candidates = chromePaths[process.platform] || chromePaths.linux;
-    let executablePath = null;
-    const fs = require('fs');
-    for (const p of candidates) {
-      if (p && fs.existsSync(p)) { executablePath = p; break; }
-    }
-
-    if (!executablePath) {
-      sendStatus('error', 'Chrome not found. Please install Google Chrome.');
-      return { ok: false, error: 'Chrome not found' };
-    }
-
-    // Use a persistent user data dir so Google login persists between app restarts
-    const userDataDir = path.join(app.getPath('userData'), 'yt-chrome-profile');
-
-    ytBrowser = await puppeteer.launch({
-      executablePath,
-      userDataDir,
-      headless: false,
-      defaultViewport: null,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-blink-features=AutomationControlled',
-      ],
-    });
-
-    // Open the live chat URL
     const chatUrlResult = await resolveYoutubeChatUrl(input);
-    const pages = await ytBrowser.pages();
-    ytPage = pages[0] || await ytBrowser.newPage();
+    let chatUrl;
 
     if (chatUrlResult.needsExtract) {
-      // Load the channel's /live page and read ytInitialPlayerResponse — this is the
-      // global YouTube sets specifically for the video in the player, never sidebar/recs
       sendStatus('connecting', 'Looking up live stream...');
-      await ytPage.goto(chatUrlResult.channelUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      await ytWin.loadURL(chatUrlResult.channelUrl);
 
-      let videoId = null;
-      try {
-        await ytPage.waitForFunction(
-          () => !!window.ytInitialPlayerResponse?.videoDetails?.videoId,
-          { timeout: 10000 }
-        );
-        const details = await ytPage.evaluate(() => ({
-          videoId: window.ytInitialPlayerResponse?.videoDetails?.videoId || null,
-          isLive: window.ytInitialPlayerResponse?.videoDetails?.isLiveContent || false,
-          channelId: window.ytInitialPlayerResponse?.videoDetails?.channelId || null,
-          title: window.ytInitialPlayerResponse?.videoDetails?.title || '',
-        }));
-        videoId = details.videoId;
-      } catch {}
+      const details = await ytWaitFor(
+        'window.ytInitialPlayerResponse && window.ytInitialPlayerResponse.videoDetails && window.ytInitialPlayerResponse.videoDetails.videoId ? ' +
+        '{ videoId: window.ytInitialPlayerResponse.videoDetails.videoId } : null',
+        10000
+      );
 
-      if (!videoId) {
+      if (!details || !details.videoId) {
         sendStatus('error', 'Could not find a live stream for this channel. Make sure they are currently live.');
-        if (ytBrowser) { await ytBrowser.close().catch(() => {}); ytBrowser = null; ytPage = null; }
         return { ok: false, error: 'No live stream found' };
       }
 
-      const chatUrl = `https://www.youtube.com/live_chat?is_popout=1&v=${videoId}`;
-      await ytPage.goto(chatUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      chatUrl = 'https://www.youtube.com/live_chat?is_popout=1&v=' + details.videoId;
     } else {
-      await ytPage.goto(chatUrlResult, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      chatUrl = chatUrlResult;
     }
 
-    // Check if the chat input requires login (sign-in button visible, or input disabled)
-    const needsLogin = await ytPage.evaluate(() => {
-      // Logged-out state: a "Sign in" button appears in the chat input area
-      const signInBtn = document.querySelector(
-        'yt-live-chat-message-input-renderer a[href*="accounts.google"], ' +
-        'yt-live-chat-message-input-renderer #sign-in-button, ' +
-        'yt-live-chat-message-input-renderer yt-button-renderer[has-no-emphasis] a, ' +
-        'yt-live-chat-message-input-renderer ytd-button-renderer a[href*="ServiceLogin"]'
-      );
-      if (signInBtn) return true;
-      // Also check if input area contains a sign-in prompt text
-      const inputArea = document.querySelector('yt-live-chat-message-input-renderer');
-      if (inputArea && /sign in/i.test(inputArea.textContent)) return true;
-      return false;
-    });
+    await ytWin.loadURL(chatUrl);
 
-    if (ytPage.url().includes('accounts.google.com') || ytPage.url().includes('signin') || needsLogin) {
+    const currentUrl = ytWin.webContents.getURL();
+    const needsLogin = await ytExec(
+      '(function() {' +
+      '  var s = document.querySelector(' +
+      '    "yt-live-chat-message-input-renderer a[href*=\'accounts.google\']," +' +
+      '    "yt-live-chat-message-input-renderer #sign-in-button," +' +
+      '    "yt-live-chat-message-input-renderer yt-button-renderer[has-no-emphasis] a," +' +
+      '    "yt-live-chat-message-input-renderer ytd-button-renderer a[href*=\'ServiceLogin\']"' +
+      '  );' +
+      '  if (s) return true;' +
+      '  var a = document.querySelector("yt-live-chat-message-input-renderer");' +
+      '  if (a && /sign in/i.test(a.textContent)) return true;' +
+      '  return false;' +
+      '})()'
+    ).catch(() => false);
+
+    if (currentUrl.includes('accounts.google.com') || currentUrl.includes('signin') || needsLogin) {
+      ytWin.show();
+      ytWin.focus();
+      if (needsLogin) {
+        await ytExec(
+          '(function() {' +
+          '  var s = document.querySelector(' +
+          '    "yt-live-chat-message-input-renderer a[href*=\'accounts.google\']," +' +
+          '    "yt-live-chat-message-input-renderer #sign-in-button," +' +
+          '    "yt-live-chat-message-input-renderer yt-button-renderer[has-no-emphasis] a," +' +
+          '    "yt-live-chat-message-input-renderer ytd-button-renderer a[href*=\'ServiceLogin\']"' +
+          '  );' +
+          '  if (s) s.click();' +
+          '})()'
+        ).catch(() => {});
+      }
       sendStatus('connecting', 'Please log in to Google in the YouTube window, then click Connect YouTube again');
-      // Restore the window so the user can see it and log in
-      try {
-        const client = await ytPage.target().createCDPSession();
-        const { windowId } = await client.send('Browser.getWindowForTarget');
-        await client.send('Browser.setWindowBounds', {
-          windowId, bounds: { left: 100, top: 100, width: 520, height: 700, windowState: 'normal' }
-        });
-      } catch {}
-      // Click the sign-in button if present so the login page opens automatically
-      await ytPage.evaluate(() => {
-        const signInBtn = document.querySelector(
-          'yt-live-chat-message-input-renderer a[href*="accounts.google"], ' +
-          'yt-live-chat-message-input-renderer #sign-in-button, ' +
-          'yt-live-chat-message-input-renderer yt-button-renderer[has-no-emphasis] a, ' +
-          'yt-live-chat-message-input-renderer ytd-button-renderer a[href*="ServiceLogin"]'
-        );
-        if (signInBtn) signInBtn.click();
-      });
-      // Don't proceed — user needs to log in and reconnect
       return { ok: false, error: 'Please log in to Google in the YouTube window, then click Connect YouTube again.' };
     }
 
-    // Move Chrome window off-screen (stays in normal/rendering state so Puppeteer interactions work)
-    try {
-      const client = await ytPage.target().createCDPSession();
-      const { windowId } = await client.send('Browser.getWindowForTarget');
-      await client.send('Browser.setWindowBounds', { windowId, bounds: { windowState: 'normal' } });
-      await new Promise(r => setTimeout(r, 150));
-      await client.send('Browser.setWindowBounds', { windowId, bounds: { left: -9999, top: -9999, width: 900, height: 700 } });
-    } catch {}
+    // Wait for chat messages to appear (observer starts automatically via yt-preload.js)
+    await ytWaitFor('!!document.querySelector("yt-live-chat-text-message-renderer, #message")', 20000);
 
-    // Wait for chat to load
-    await ytPage.waitForSelector('yt-live-chat-text-message-renderer, #message', { timeout: 20000 })
-      .catch(() => {}); // Don't fail if no messages yet
-
-    await injectChatObserver(ytPage);
-
-    // Get the channel name of logged-in user
-    const channelName = await ytPage.evaluate(() => {
-      const el = document.querySelector('yt-live-chat-header-renderer #channel-name, ytd-topbar-logo-renderer');
-      return el ? el.textContent.trim() : '';
-    }).catch(() => '');
+    const channelName = await ytExec(
+      '(function() {' +
+      '  var el = document.querySelector("yt-live-chat-header-renderer #channel-name, ytd-topbar-logo-renderer");' +
+      '  return el ? el.textContent.trim() : "";' +
+      '})()'
+    ).catch(() => '');
 
     ytObserverActive = true;
     sendStatus('connected', channelName);
@@ -637,26 +400,24 @@ ipcMain.handle('yt:close', async () => {
 });
 
 ipcMain.handle('yt:send', async (_, text) => {
-  if (!ytPage) return { ok: false, error: 'YouTube not connected' };
+  if (!ytWin || ytWin.isDestroyed()) return { ok: false, error: 'YouTube not connected' };
   try {
-    // Use evaluate to type directly — more reliable than keyboard events on background page
-    const sent = await ytPage.evaluate(async (msg) => {
-      // Try contenteditable input first (newer YouTube chat)
-      const input = document.querySelector('#input[contenteditable], yt-live-chat-text-input-field-renderer #input[contenteditable]');
-      if (input) {
-        input.focus();
-        // Use execCommand for contenteditable
-        document.execCommand('selectAll');
-        document.execCommand('insertText', false, msg);
-        // Find and click the send button
-        const sendBtn = document.querySelector('#send-button button, #submit-button button, yt-icon-button#send-button');
-        if (sendBtn) { sendBtn.click(); return true; }
-        // Fallback: dispatch Enter keydown
-        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', bubbles: true }));
-        return true;
-      }
-      return false;
-    }, text);
+    const safeText = JSON.stringify(text);
+    const sent = await ytExec(
+      '(function() {' +
+      '  var input = document.querySelector("#input[contenteditable], yt-live-chat-text-input-field-renderer #input[contenteditable]");' +
+      '  if (input) {' +
+      '    input.focus();' +
+      '    document.execCommand("selectAll");' +
+      '    document.execCommand("insertText", false, ' + safeText + ');' +
+      '    var sendBtn = document.querySelector("#send-button button, #submit-button button, yt-icon-button#send-button");' +
+      '    if (sendBtn) { sendBtn.click(); return true; }' +
+      '    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", code: "Enter", bubbles: true }));' +
+      '    return true;' +
+      '  }' +
+      '  return false;' +
+      '})()'
+    );
     if (!sent) throw new Error('Chat input not found — is YouTube chat open?');
     return { ok: true };
   } catch (e) {
@@ -665,83 +426,80 @@ ipcMain.handle('yt:send', async (_, text) => {
 });
 
 ipcMain.handle('yt:debug', async () => {
-  if (!ytPage) return { ok: false };
-  const info = await ytPage.evaluate(() => {
-    const msgs = [...document.querySelectorAll('yt-live-chat-text-message-renderer')].slice(-5);
-    return msgs.map(el => ({
-      id: el.getAttribute('id'),
-      dataId: el.getAttribute('data-id'),
-      authorId: el.getAttribute('author-id') || el.getAttribute('data-author-id'),
-      text: (el.querySelector('#message') || el).textContent.trim().slice(0, 40),
-      hasOverflow: !!el.querySelector('#overflow, yt-icon-button#overflow, button#overflow'),
-    }));
-  });
+  if (!ytWin || ytWin.isDestroyed()) return { ok: false };
+  const info = await ytExec(
+    '(function() {' +
+    '  var msgs = Array.from(document.querySelectorAll("yt-live-chat-text-message-renderer")).slice(-5);' +
+    '  return msgs.map(function(el) {' +
+    '    return {' +
+    '      id: el.getAttribute("id"),' +
+    '      dataId: el.getAttribute("data-id"),' +
+    '      scId: el.getAttribute("data-sc-id"),' +
+    '      authorId: el.getAttribute("author-id") || el.getAttribute("data-author-id"),' +
+    '      text: (el.querySelector("#message") || el).textContent.trim().slice(0, 40),' +
+    '    };' +
+    '  });' +
+    '})()'
+  );
   return { ok: true, info };
 });
 
 ipcMain.handle('yt:delete', async (_, { msgId, authorId, text }) => {
-  if (!ytPage) return { ok: false, error: 'YouTube not connected' };
+  if (!ytWin || ytWin.isDestroyed()) return { ok: false, error: 'YouTube not connected' };
   try {
-    // Step 1: get an ElementHandle for the target message.
-    // ElementHandle.click() uses CDP (isTrusted=true) and handles scrollIntoView internally.
-    const msgHandle = await ytPage.evaluateHandle((id, txt, aId) => {
-      // Primary: look up the exact element we stored when the message was first observed
-      let msgEl = window.__scMsgMap?.get(id) || null;
-      // Validate it's still in the DOM (YouTube may have recycled it)
-      if (msgEl && !document.contains(msgEl)) msgEl = null;
+    const safeId = (msgId || '').replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    const safeText = ((text || '').slice(0, 20)).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    const safeAuthorId = (authorId || '').replace(/\\/g, '\\\\').replace(/"/g, '\\"');
 
-      // Fallback: YouTube attribute lookup
-      if (!msgEl) {
-        msgEl = document.getElementById(id) ||
-                document.querySelector(`[id="${id}"], [data-id="${id}"]`) ||
-                null;
-      }
+    // Find the message element and get its center coordinates
+    const rect = await ytExec(
+      '(function() {' +
+      '  var el = document.querySelector("[data-sc-id=\\"' + safeId + '\\"]") ||' +
+      '           document.getElementById("' + safeId + '") ||' +
+      '           document.querySelector("[id=\\"' + safeId + '\\"], [data-id=\\"' + safeId + '\\"]");' +
+      '  if (!el) {' +
+      '    var prefix = "' + safeText + '";' +
+      '    var aId = "' + safeAuthorId + '";' +
+      '    var all = Array.from(document.querySelectorAll("yt-live-chat-text-message-renderer"));' +
+      '    var cands = aId ? all.filter(function(m) { return (m.getAttribute("author-id") || m.getAttribute("data-author-id") || "") === aId; }) : all;' +
+      '    for (var i = cands.length - 1; i >= 0; i--) {' +
+      '      if ((cands[i].querySelector("#message") || cands[i]).textContent.trim().startsWith(prefix)) { el = cands[i]; break; }' +
+      '    }' +
+      '  }' +
+      '  if (!el) return null;' +
+      '  el.scrollIntoView({ block: "nearest" });' +
+      '  var r = el.getBoundingClientRect();' +
+      '  return r.width > 0 ? { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) } : null;' +
+      '})()'
+    );
 
-      // Last resort: text + author search (only when both ID paths fail)
-      if (!msgEl && txt) {
-        const prefix = txt.slice(0, 20);
-        const all = [...document.querySelectorAll('yt-live-chat-text-message-renderer')];
-        const candidates = aId
-          ? all.filter(m => (m.getAttribute('author-id') || m.getAttribute('data-author-id') || '') === aId)
-          : all;
-        const matches = candidates.filter(m => (m.querySelector('#message') || m).textContent.trim().startsWith(prefix));
-        msgEl = matches.findLast(m => !!m) || null;
-      }
-      return msgEl;
-    }, msgId, text || '', authorId || '');
+    if (!rect) return { ok: false, error: 'Message not found in chat' };
 
-    const found = await msgHandle.evaluate(el => !!el);
-    if (!found) return { ok: false, error: 'Message not found in chat' };
-
-    // Step 2: CDP click on the message body (isTrusted=true, scroll handled automatically)
-    await msgHandle.click();
+    ytWin.webContents.sendInputEvent({ type: 'mouseDown', x: rect.x, y: rect.y, button: 'left', clickCount: 1 });
+    ytWin.webContents.sendInputEvent({ type: 'mouseUp', x: rect.x, y: rect.y, button: 'left', clickCount: 1 });
     await new Promise(r => setTimeout(r, 700));
 
-    // Step 3: find the Remove item's screen coordinates and do a second CDP click on it.
-    // This avoids all Polymer/API complexity — two real clicks, same as a user would do.
-    const removeCoords = await ytPage.evaluate(() => {
-      const containers = document.querySelectorAll(
-        'tp-yt-paper-listbox, ytd-menu-popup-renderer, yt-live-chat-item-context-menu-renderer, tp-yt-iron-dropdown[opened]'
-      );
-      for (const c of containers) {
-        const items = [...c.querySelectorAll('tp-yt-paper-item, ytd-menu-service-item-renderer')];
-        const hit = items.find(i => /remove|supprimer/i.test(i.textContent));
-        if (hit) {
-          const r = hit.getBoundingClientRect();
-          if (r.width && r.height) return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
-        }
-      }
-      // Debug: show what menus/items are present
-      const info = [...document.querySelectorAll('tp-yt-paper-listbox, ytd-menu-popup-renderer, yt-live-chat-item-context-menu-renderer, tp-yt-iron-dropdown[opened]')]
-        .map(c => `${c.tagName}[${[...c.querySelectorAll('tp-yt-paper-item,ytd-menu-service-item-renderer')].map(i => i.textContent.trim().slice(0, 25)).join('|')}]`)
-        .join(' / ');
-      return { error: `No Remove found. Menus: ${info || 'none'}` };
-    });
+    const removeCoords = await ytExec(
+      '(function() {' +
+      '  var containers = document.querySelectorAll("tp-yt-paper-listbox, ytd-menu-popup-renderer, yt-live-chat-item-context-menu-renderer, tp-yt-iron-dropdown[opened]");' +
+      '  for (var i = 0; i < containers.length; i++) {' +
+      '    var items = Array.from(containers[i].querySelectorAll("tp-yt-paper-item, ytd-menu-service-item-renderer"));' +
+      '    var hit = items.find(function(x) { return /remove|supprimer/i.test(x.textContent); });' +
+      '    if (hit) {' +
+      '      var r = hit.getBoundingClientRect();' +
+      '      if (r.width && r.height) return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };' +
+      '    }' +
+      '  }' +
+      '  var info = Array.from(document.querySelectorAll("tp-yt-paper-listbox, ytd-menu-popup-renderer, yt-live-chat-item-context-menu-renderer, tp-yt-iron-dropdown[opened]"))' +
+      '    .map(function(c) { return c.tagName + "[" + Array.from(c.querySelectorAll("tp-yt-paper-item,ytd-menu-service-item-renderer")).map(function(x) { return x.textContent.trim().slice(0, 25); }).join("|") + "]"; }).join(" / ");' +
+      '  return { error: "No Remove found. Menus: " + (info || "none") };' +
+      '})()'
+    );
 
     if (removeCoords.error) return { ok: false, error: removeCoords.error };
 
-    // CDP click on the Remove item — isTrusted=true, menu is stable at this point
-    await ytPage.mouse.click(removeCoords.x, removeCoords.y);
+    ytWin.webContents.sendInputEvent({ type: 'mouseDown', x: removeCoords.x, y: removeCoords.y, button: 'left', clickCount: 1 });
+    ytWin.webContents.sendInputEvent({ type: 'mouseUp', x: removeCoords.x, y: removeCoords.y, button: 'left', clickCount: 1 });
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e.message };
@@ -750,63 +508,85 @@ ipcMain.handle('yt:delete', async (_, { msgId, authorId, text }) => {
 
 // Helper: click a user's avatar/name in chat to open their panel, then find a mod action
 async function ytModAction(channelId, actionLabel) {
-  if (!ytPage) return { ok: false, error: 'YouTube not connected' };
+  if (!ytWin || ytWin.isDestroyed()) return { ok: false, error: 'YouTube not connected' };
   try {
-    // Find a message from this user and click their avatar to open mod menu
-    const found = await ytPage.evaluate((cid) => {
-      const messages = [...document.querySelectorAll('yt-live-chat-text-message-renderer')];
-      for (const msg of messages) {
-        const authorId = msg.getAttribute('author-id') || msg.getAttribute('data-author-id') || '';
-        if (authorId === cid) {
-          // Click the author avatar/chip to open the user action menu
-          const chip = msg.querySelector('yt-live-chat-author-chip, #author-name');
-          if (chip) { chip.click(); return true; }
-        }
-      }
-      return false;
-    }, channelId);
+    const safeId = channelId.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
 
-    if (!found) return { ok: false, error: 'User not found in current chat — they must have a visible message' };
-
-    // Wait for the action panel/menu to appear
-    await ytPage.waitForSelector(
-      'yt-live-chat-user-info-panel, ytd-menu-popup-renderer, tp-yt-paper-listbox',
-      { timeout: 3000 }
+    // Find a message from this user and get the author chip's coordinates
+    const chipRect = await ytExec(
+      '(function() {' +
+      '  var messages = Array.from(document.querySelectorAll("yt-live-chat-text-message-renderer"));' +
+      '  for (var i = 0; i < messages.length; i++) {' +
+      '    var msg = messages[i];' +
+      '    var authorId = msg.getAttribute("author-id") || msg.getAttribute("data-author-id") || "";' +
+      '    if (authorId === "' + safeId + '") {' +
+      '      var chip = msg.querySelector("yt-live-chat-author-chip, #author-name");' +
+      '      if (chip) {' +
+      '        var r = chip.getBoundingClientRect();' +
+      '        return r.width > 0 ? { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) } : null;' +
+      '      }' +
+      '    }' +
+      '  }' +
+      '  return null;' +
+      '})()'
     );
 
-    // Build multilingual regex pattern for the action label
+    if (!chipRect) return { ok: false, error: 'User not found in current chat — they must have a visible message' };
+
+    ytWin.webContents.sendInputEvent({ type: 'mouseDown', x: chipRect.x, y: chipRect.y, button: 'left', clickCount: 1 });
+    ytWin.webContents.sendInputEvent({ type: 'mouseUp', x: chipRect.x, y: chipRect.y, button: 'left', clickCount: 1 });
+
+    // Wait for the action panel/menu to appear
+    const panelFound = await ytWaitFor(
+      '!!document.querySelector("yt-live-chat-user-info-panel, ytd-menu-popup-renderer, tp-yt-paper-listbox")',
+      3000
+    );
+    if (!panelFound) return { ok: false, error: 'Mod menu did not appear' };
+
     const labelPatterns = {
       timeout: 'timeout|bloquer temporairement',
       ban: 'hide user|masquer l.utilisateur',
     };
     const labelPattern = labelPatterns[actionLabel.toLowerCase()] || actionLabel;
+    const safePattern = labelPattern.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
 
-    // Find and click the matching action button
-    const clicked = await ytPage.evaluate((pattern) => {
-      const re = new RegExp(pattern, 'i');
-      // Try action panel buttons first
-      const panel = document.querySelector('yt-live-chat-user-info-panel');
-      if (panel) {
-        const btns = [...panel.querySelectorAll('button, tp-yt-paper-button, yt-button-renderer')];
-        const btn = btns.find(b => re.test(b.textContent));
-        if (btn) { btn.click(); return true; }
-      }
-      // Try popup menu items
-      const items = [...document.querySelectorAll('tp-yt-paper-item, ytd-menu-service-item-renderer')];
-      const item = items.find(i => re.test(i.textContent));
-      if (item) { item.click(); return true; }
-      return false;
-    }, labelPattern);
+    // Find the action button/item and get its coordinates
+    const actionRect = await ytExec(
+      '(function() {' +
+      '  var re = new RegExp("' + safePattern + '", "i");' +
+      '  var panel = document.querySelector("yt-live-chat-user-info-panel");' +
+      '  if (panel) {' +
+      '    var btns = Array.from(panel.querySelectorAll("button, tp-yt-paper-button, yt-button-renderer"));' +
+      '    var btn = btns.find(function(b) { return re.test(b.textContent); });' +
+      '    if (btn) { var r = btn.getBoundingClientRect(); return r.width > 0 ? { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) } : null; }' +
+      '  }' +
+      '  var items = Array.from(document.querySelectorAll("tp-yt-paper-item, ytd-menu-service-item-renderer"));' +
+      '  var item = items.find(function(x) { return re.test(x.textContent); });' +
+      '  if (item) { var r = item.getBoundingClientRect(); return r.width > 0 ? { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) } : null; }' +
+      '  return null;' +
+      '})()'
+    );
 
-    if (!clicked) return { ok: false, error: `Could not find "${actionLabel}" action in the menu` };
+    if (!actionRect) return { ok: false, error: 'Could not find "' + actionLabel + '" action in the menu' };
 
-    // If a confirmation dialog appears, confirm it
+    ytWin.webContents.sendInputEvent({ type: 'mouseDown', x: actionRect.x, y: actionRect.y, button: 'left', clickCount: 1 });
+    ytWin.webContents.sendInputEvent({ type: 'mouseUp', x: actionRect.x, y: actionRect.y, button: 'left', clickCount: 1 });
+
+    // Handle optional confirmation dialog
     await new Promise(r => setTimeout(r, 500));
-    await ytPage.evaluate(() => {
-      const confirmBtns = [...document.querySelectorAll('button, tp-yt-paper-button')];
-      const confirm = confirmBtns.find(b => /confirm|ok|yes|submit|confirmer|oui/i.test(b.textContent));
-      if (confirm) confirm.click();
-    });
+    const confirmRect = await ytExec(
+      '(function() {' +
+      '  var btns = Array.from(document.querySelectorAll("button, tp-yt-paper-button"));' +
+      '  var confirm = btns.find(function(b) { return /confirm|ok|yes|submit|confirmer|oui/i.test(b.textContent); });' +
+      '  if (confirm) { var r = confirm.getBoundingClientRect(); return r.width > 0 ? { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) } : null; }' +
+      '  return null;' +
+      '})()'
+    ).catch(() => null);
+
+    if (confirmRect) {
+      ytWin.webContents.sendInputEvent({ type: 'mouseDown', x: confirmRect.x, y: confirmRect.y, button: 'left', clickCount: 1 });
+      ytWin.webContents.sendInputEvent({ type: 'mouseUp', x: confirmRect.x, y: confirmRect.y, button: 'left', clickCount: 1 });
+    }
 
     return { ok: true };
   } catch (e) {
@@ -827,48 +607,39 @@ ipcMain.handle('yt:ban', async (_, channelId) => {
 });
 
 ipcMain.handle('yt:getEmotes', async () => {
-  if (!ytPage) return { ok: false, error: 'YouTube not connected' };
+  if (!ytWin || ytWin.isDestroyed()) return { ok: false, error: 'YouTube not connected' };
   try {
-    const emotes = await ytPage.evaluate(async () => {
-      // Click the emoji button to open the picker
-      const emojiBtn = document.querySelector(
-        '#picker-buttons yt-icon-button, button#emoji-picker-button, ' +
-        'yt-live-chat-message-input-renderer #picker-buttons button'
-      );
-      if (!emojiBtn) return [];
-      emojiBtn.click();
-
-      // Wait for the picker panel to appear
-      await new Promise(r => setTimeout(r, 800));
-
-      const results = [];
-      const seen = new Set();
-
-      // Scrape all emoji items from the panel
-      const items = document.querySelectorAll(
-        'yt-emoji-picker-renderer yt-emoji-icon-renderer, ' +
-        'yt-live-chat-emoji-picker-entity-view-model img, ' +
-        'yt-emoji-picker-renderer img'
-      );
-
-      items.forEach(el => {
-        const img = el.tagName === 'IMG' ? el : el.querySelector('img');
-        if (!img) return;
-        const src = img.src || img.dataset.src || '';
-        if (!src || !src.startsWith('http')) return;
-        // Get the name from aria-label, alt, or tooltip
-        const name = img.alt || el.getAttribute('aria-label') ||
-                     el.closest('[aria-label]')?.getAttribute('aria-label') || '';
-        if (!name || seen.has(name)) return;
-        seen.add(name);
-        results.push({ name: name.replace(/^:|:$/g, ''), url: src });
-      });
-
-      // Close picker
-      emojiBtn.click();
-      return results;
-    });
-
+    const emotes = await ytExec(
+      '(async function() {' +
+      '  var emojiBtn = document.querySelector(' +
+      '    "#picker-buttons yt-icon-button, button#emoji-picker-button," +' +
+      '    "yt-live-chat-message-input-renderer #picker-buttons button"' +
+      '  );' +
+      '  if (!emojiBtn) return [];' +
+      '  emojiBtn.click();' +
+      '  await new Promise(function(r) { setTimeout(r, 800); });' +
+      '  var results = [];' +
+      '  var seen = new Set();' +
+      '  var items = document.querySelectorAll(' +
+      '    "yt-emoji-picker-renderer yt-emoji-icon-renderer," +' +
+      '    "yt-live-chat-emoji-picker-entity-view-model img," +' +
+      '    "yt-emoji-picker-renderer img"' +
+      '  );' +
+      '  items.forEach(function(el) {' +
+      '    var img = el.tagName === "IMG" ? el : el.querySelector("img");' +
+      '    if (!img) return;' +
+      '    var src = img.src || img.dataset.src || "";' +
+      '    if (!src || !src.startsWith("http")) return;' +
+      '    var name = img.alt || el.getAttribute("aria-label") ||' +
+      '               (el.closest("[aria-label]") && el.closest("[aria-label]").getAttribute("aria-label")) || "";' +
+      '    if (!name || seen.has(name)) return;' +
+      '    seen.add(name);' +
+      '    results.push({ name: name.replace(/^:|:$/g, ""), url: src });' +
+      '  });' +
+      '  emojiBtn.click();' +
+      '  return results;' +
+      '})()'
+    );
     return { ok: true, emotes };
   } catch (e) {
     return { ok: false, error: e.message };
@@ -876,48 +647,27 @@ ipcMain.handle('yt:getEmotes', async () => {
 });
 
 ipcMain.handle('yt:showWindow', async () => {
-  if (!ytPage) return { ok: false, error: 'YouTube not connected' };
-  try {
-    const client = await ytPage.target().createCDPSession();
-    const { windowId } = await client.send('Browser.getWindowForTarget');
-    // On Windows, must restore to normal first, then set position in a second call
-    await client.send('Browser.setWindowBounds', { windowId, bounds: { windowState: 'normal' } });
-    await new Promise(r => setTimeout(r, 150));
-    await client.send('Browser.setWindowBounds', { windowId, bounds: { left: 100, top: 120, width: 520, height: 700 } });
-    await ytPage.bringToFront();
-    // On Windows, use SetForegroundWindow via PowerShell to win the OS-level focus battle
-    if (process.platform === 'win32' && ytBrowser?.process()?.pid) {
-      const { exec } = require('child_process');
-      const pid = ytBrowser.process().pid;
-      const script = `$p=Get-Process -Id ${pid} -EA 0;if($p -and $p.MainWindowHandle -ne [IntPtr]::Zero){Add-Type -Name W -Namespace U -MemberDefinition '[DllImport("user32.dll")]public static extern bool SetForegroundWindow(IntPtr h);';[U.W]::SetForegroundWindow($p.MainWindowHandle)}`;
-      const encoded = Buffer.from(script, 'utf16le').toString('base64');
-      exec(`powershell -NoProfile -NonInteractive -WindowStyle Hidden -EncodedCommand ${encoded}`, () => {});
-    }
-    return { ok: true };
-  } catch (e) {
-    return { ok: false, error: e.message };
-  }
+  if (!ytWin || ytWin.isDestroyed()) return { ok: false, error: 'YouTube not connected' };
+  ytWin.show();
+  ytWin.focus();
+  return { ok: true };
 });
 
 ipcMain.handle('yt:hideWindow', async () => {
-  if (!ytPage) return { ok: false, error: 'YouTube not connected' };
-  try {
-    const client = await ytPage.target().createCDPSession();
-    const { windowId } = await client.send('Browser.getWindowForTarget');
-    await client.send('Browser.setWindowBounds', { windowId, bounds: { left: -9999, top: -9999, width: 900, height: 700 } });
-    return { ok: true };
-  } catch (e) {
-    return { ok: false, error: e.message };
-  }
+  if (!ytWin || ytWin.isDestroyed()) return { ok: false, error: 'YouTube not connected' };
+  ytWin.hide();
+  return { ok: true };
 });
 
 ipcMain.handle('yt:getChannelName', async () => {
-  if (!ytPage) return { ok: false };
+  if (!ytWin || ytWin.isDestroyed()) return { ok: false };
   try {
-    const name = await ytPage.evaluate(() => {
-      const el = document.querySelector('#author-name, yt-live-chat-author-chip');
-      return el ? el.textContent.trim() : '';
-    });
+    const name = await ytExec(
+      '(function() {' +
+      '  var el = document.querySelector("#author-name, yt-live-chat-author-chip");' +
+      '  return el ? el.textContent.trim() : "";' +
+      '})()'
+    );
     return { ok: true, name };
   } catch {
     return { ok: false };
