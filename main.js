@@ -239,6 +239,7 @@ function createYtWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       partition: 'persist:youtube',
+      backgroundThrottling: false,
     },
   });
   // Alt+F4 / system close — hide instead of destroy
@@ -376,6 +377,15 @@ ipcMain.handle('yt:open', async (_, input) => {
     // Wait for chat messages to appear (observer starts automatically via yt-preload.js)
     await ytWaitFor('!!document.querySelector("yt-live-chat-text-message-renderer, #message")', 20000);
 
+    // Override visibility API so YouTube doesn't pause auto-scroll in the hidden window
+    await ytExec(
+      'try {' +
+      '  Object.defineProperty(document, "visibilityState", { get: function() { return "visible"; }, configurable: true });' +
+      '  Object.defineProperty(document, "hidden", { get: function() { return false; }, configurable: true });' +
+      '  document.dispatchEvent(new Event("visibilitychange"));' +
+      '} catch(e) {}'
+    ).catch(() => {});
+
     const channelName = await ytExec(
       '(function() {' +
       '  var el = document.querySelector("yt-live-chat-header-renderer #channel-name, ytd-topbar-logo-renderer");' +
@@ -479,27 +489,21 @@ ipcMain.handle('yt:delete', async (_, { msgId, authorId, text }) => {
     ytWin.webContents.sendInputEvent({ type: 'mouseUp', x: rect.x, y: rect.y, button: 'left', clickCount: 1 });
     await new Promise(r => setTimeout(r, 700));
 
-    const removeCoords = await ytExec(
+    const removed = await ytExec(
       '(function() {' +
       '  var containers = document.querySelectorAll("tp-yt-paper-listbox, ytd-menu-popup-renderer, yt-live-chat-item-context-menu-renderer, tp-yt-iron-dropdown[opened]");' +
       '  for (var i = 0; i < containers.length; i++) {' +
       '    var items = Array.from(containers[i].querySelectorAll("tp-yt-paper-item, ytd-menu-service-item-renderer"));' +
       '    var hit = items.find(function(x) { return /remove|supprimer/i.test(x.textContent); });' +
-      '    if (hit) {' +
-      '      var r = hit.getBoundingClientRect();' +
-      '      if (r.width && r.height) return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };' +
-      '    }' +
+      '    if (hit) { hit.click(); return true; }' +
       '  }' +
       '  var info = Array.from(document.querySelectorAll("tp-yt-paper-listbox, ytd-menu-popup-renderer, yt-live-chat-item-context-menu-renderer, tp-yt-iron-dropdown[opened]"))' +
       '    .map(function(c) { return c.tagName + "[" + Array.from(c.querySelectorAll("tp-yt-paper-item,ytd-menu-service-item-renderer")).map(function(x) { return x.textContent.trim().slice(0, 25); }).join("|") + "]"; }).join(" / ");' +
-      '  return { error: "No Remove found. Menus: " + (info || "none") };' +
+      '  return "No Remove found. Menus: " + (info || "none");' +
       '})()'
     );
 
-    if (removeCoords.error) return { ok: false, error: removeCoords.error };
-
-    ytWin.webContents.sendInputEvent({ type: 'mouseDown', x: removeCoords.x, y: removeCoords.y, button: 'left', clickCount: 1 });
-    ytWin.webContents.sendInputEvent({ type: 'mouseUp', x: removeCoords.x, y: removeCoords.y, button: 'left', clickCount: 1 });
+    if (removed !== true) return { ok: false, error: removed };
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e.message };
@@ -550,43 +554,31 @@ async function ytModAction(channelId, actionLabel) {
     const labelPattern = labelPatterns[actionLabel.toLowerCase()] || actionLabel;
     const safePattern = labelPattern.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
 
-    // Find the action button/item and get its coordinates
-    const actionRect = await ytExec(
+    // Find and click the action button directly
+    const actionClicked = await ytExec(
       '(function() {' +
       '  var re = new RegExp("' + safePattern + '", "i");' +
       '  var panel = document.querySelector("yt-live-chat-user-info-panel");' +
       '  if (panel) {' +
-      '    var btns = Array.from(panel.querySelectorAll("button, tp-yt-paper-button, yt-button-renderer"));' +
-      '    var btn = btns.find(function(b) { return re.test(b.textContent); });' +
-      '    if (btn) { var r = btn.getBoundingClientRect(); return r.width > 0 ? { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) } : null; }' +
+      '    var btn = Array.from(panel.querySelectorAll("button, tp-yt-paper-button, yt-button-renderer")).find(function(b) { return re.test(b.textContent); });' +
+      '    if (btn) { btn.click(); return true; }' +
       '  }' +
-      '  var items = Array.from(document.querySelectorAll("tp-yt-paper-item, ytd-menu-service-item-renderer"));' +
-      '  var item = items.find(function(x) { return re.test(x.textContent); });' +
-      '  if (item) { var r = item.getBoundingClientRect(); return r.width > 0 ? { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) } : null; }' +
-      '  return null;' +
+      '  var item = Array.from(document.querySelectorAll("tp-yt-paper-item, ytd-menu-service-item-renderer")).find(function(x) { return re.test(x.textContent); });' +
+      '  if (item) { item.click(); return true; }' +
+      '  return false;' +
       '})()'
     );
 
-    if (!actionRect) return { ok: false, error: 'Could not find "' + actionLabel + '" action in the menu' };
-
-    ytWin.webContents.sendInputEvent({ type: 'mouseDown', x: actionRect.x, y: actionRect.y, button: 'left', clickCount: 1 });
-    ytWin.webContents.sendInputEvent({ type: 'mouseUp', x: actionRect.x, y: actionRect.y, button: 'left', clickCount: 1 });
+    if (!actionClicked) return { ok: false, error: 'Could not find "' + actionLabel + '" action in the menu' };
 
     // Handle optional confirmation dialog
     await new Promise(r => setTimeout(r, 500));
-    const confirmRect = await ytExec(
+    await ytExec(
       '(function() {' +
-      '  var btns = Array.from(document.querySelectorAll("button, tp-yt-paper-button"));' +
-      '  var confirm = btns.find(function(b) { return /confirm|ok|yes|submit|confirmer|oui/i.test(b.textContent); });' +
-      '  if (confirm) { var r = confirm.getBoundingClientRect(); return r.width > 0 ? { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) } : null; }' +
-      '  return null;' +
+      '  var confirm = Array.from(document.querySelectorAll("button, tp-yt-paper-button")).find(function(b) { return /confirm|ok|yes|submit|confirmer|oui/i.test(b.textContent); });' +
+      '  if (confirm) confirm.click();' +
       '})()'
-    ).catch(() => null);
-
-    if (confirmRect) {
-      ytWin.webContents.sendInputEvent({ type: 'mouseDown', x: confirmRect.x, y: confirmRect.y, button: 'left', clickCount: 1 });
-      ytWin.webContents.sendInputEvent({ type: 'mouseUp', x: confirmRect.x, y: confirmRect.y, button: 'left', clickCount: 1 });
-    }
+    ).catch(() => {});
 
     return { ok: true };
   } catch (e) {

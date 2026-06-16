@@ -62,6 +62,17 @@ function startObserver() {
   container.querySelectorAll('yt-live-chat-paid-message-renderer').forEach(el => processPaidMsg(el, seen, msgIndex++, false));
   container.querySelectorAll('yt-live-chat-membership-item-renderer').forEach(el => processMembershipMsg(el, seen, msgIndex++, false));
 
+  // Periodically nudge scroll to bottom — YouTube pauses auto-scroll in hidden windows
+  setInterval(function() {
+    var btn = document.querySelector(
+      'yt-live-chat-item-list-renderer #scroll-to-bottom, ' +
+      'yt-live-chat-item-list-renderer #show-more'
+    );
+    if (btn && !btn.hidden && btn.offsetParent !== null) { btn.click(); return; }
+    var list = document.querySelector('#item-list.yt-live-chat-item-list-renderer, yt-live-chat-item-list-renderer #item-list');
+    if (list) list.scrollTop = list.scrollHeight;
+  }, 3000);
+
   const observer = new MutationObserver(mutations => {
     mutations.forEach(m => {
       m.addedNodes.forEach(node => {
