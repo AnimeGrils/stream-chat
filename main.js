@@ -266,6 +266,17 @@ function ytExec(js) {
   return ytWin.webContents.executeJavaScript(js);
 }
 
+// Navigate the YT window. YouTube's own client-side JS sometimes redirects mid-navigation
+// (e.g. appending ?themeRefresh=1), which aborts our loadURL() with ERR_ABORTED even though
+// the page goes on to load fine — that's not a real failure, so swallow just that error.
+async function ytLoad(url) {
+  try {
+    await ytWin.loadURL(url);
+  } catch (e) {
+    if (!/ERR_ABORTED/.test(e.message)) throw e;
+  }
+}
+
 // Poll until js expression returns truthy, or timeout
 async function ytWaitFor(js, timeout) {
   timeout = timeout || 10000;
@@ -318,7 +329,7 @@ ipcMain.handle('yt:open', async (_, input) => {
 
     if (chatUrlResult.needsExtract) {
       sendStatus('connecting', 'Looking up live stream...');
-      await ytWin.loadURL(chatUrlResult.channelUrl);
+      await ytLoad(chatUrlResult.channelUrl);
 
       const details = await ytWaitFor(
         'window.ytInitialPlayerResponse && window.ytInitialPlayerResponse.videoDetails && window.ytInitialPlayerResponse.videoDetails.videoId ? ' +
@@ -336,7 +347,7 @@ ipcMain.handle('yt:open', async (_, input) => {
       chatUrl = chatUrlResult;
     }
 
-    await ytWin.loadURL(chatUrl);
+    await ytLoad(chatUrl);
 
     const currentUrl = ytWin.webContents.getURL();
     const needsLogin = await ytExec(
