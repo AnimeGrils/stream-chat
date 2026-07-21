@@ -498,9 +498,9 @@ ipcMain.handle('yt:delete', async (_, { msgId, authorId, text }) => {
 
     ytWin.webContents.sendInputEvent({ type: 'mouseDown', x: rect.x, y: rect.y, button: 'left', clickCount: 1 });
     ytWin.webContents.sendInputEvent({ type: 'mouseUp', x: rect.x, y: rect.y, button: 'left', clickCount: 1 });
-    await new Promise(r => setTimeout(r, 700));
 
-    const removed = await ytExec(
+    // Poll until Remove appears in the context menu (up to 3s) rather than a fixed delay
+    const removed = await ytWaitFor(
       '(function() {' +
       '  var containers = document.querySelectorAll("tp-yt-paper-listbox, ytd-menu-popup-renderer, yt-live-chat-item-context-menu-renderer, tp-yt-iron-dropdown[opened]");' +
       '  for (var i = 0; i < containers.length; i++) {' +
@@ -508,13 +508,18 @@ ipcMain.handle('yt:delete', async (_, { msgId, authorId, text }) => {
       '    var hit = items.find(function(x) { return /remove|supprimer/i.test(x.textContent); });' +
       '    if (hit) { hit.click(); return true; }' +
       '  }' +
-      '  var info = Array.from(document.querySelectorAll("tp-yt-paper-listbox, ytd-menu-popup-renderer, yt-live-chat-item-context-menu-renderer, tp-yt-iron-dropdown[opened]"))' +
-      '    .map(function(c) { return c.tagName + "[" + Array.from(c.querySelectorAll("tp-yt-paper-item,ytd-menu-service-item-renderer")).map(function(x) { return x.textContent.trim().slice(0, 25); }).join("|") + "]"; }).join(" / ");' +
-      '  return "No Remove found. Menus: " + (info || "none");' +
-      '})()'
+      '  return false;' +
+      '})()',
+      3000
     );
 
-    if (removed !== true) return { ok: false, error: removed };
+    if (!removed) {
+      const info = await ytExec(
+        'Array.from(document.querySelectorAll("tp-yt-paper-listbox, ytd-menu-popup-renderer, yt-live-chat-item-context-menu-renderer, tp-yt-iron-dropdown[opened]"))' +
+        '.map(function(c) { return c.tagName + "[" + Array.from(c.querySelectorAll("tp-yt-paper-item,ytd-menu-service-item-renderer")).map(function(x) { return x.textContent.trim().slice(0, 25); }).join("|") + "]"; }).join(" / ")'
+      ).catch(() => 'unknown');
+      return { ok: false, error: 'No Remove found after 3s. Menus: ' + (info || 'none') };
+    }
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e.message };
