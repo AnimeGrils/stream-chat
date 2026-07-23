@@ -163,6 +163,7 @@ function processMsg(el, seen, index, isLive) {
     });
     delObs.observe(el, { attributes: true, attributeFilter: ['is-deleted'] });
   }
+
 }
 
 function processPaidMsg(el, seen, index, isLive) {
@@ -227,3 +228,6 @@ function processMembershipMsg(el, seen, index, isLive) {
 
   ipcRenderer.send('yt:fwd:membership', { id, author, tier, message, isLive, ts: Date.now() });
 }
+
+// Deletion is handled by the main process (ytDeleteImpl in main.js), which runs the
+// InnerTube moderate call in the page's own context via executeJavaScript.

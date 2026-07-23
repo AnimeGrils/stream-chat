@@ -465,66 +465,80 @@ ipcMain.handle('yt:debug', async () => {
   return { ok: true, info };
 });
 
-ipcMain.handle('yt:delete', async (_, { msgId, authorId, text }) => {
+async function ytDeleteImpl({ msgId, authorId, text }) {
   if (!ytWin || ytWin.isDestroyed()) return { ok: false, error: 'YouTube not connected' };
   try {
     const safeId = (msgId || '').replace(/\\/g, '\\\\').replace(/"/g, '\\"');
     const safeText = ((text || '').slice(0, 20)).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
     const safeAuthorId = (authorId || '').replace(/\\/g, '\\\\').replace(/"/g, '\\"');
 
-    // Find the message element and get its center coordinates
-    const rect = await ytExec(
-      '(function() {' +
-      '  var el = document.querySelector("[data-sc-id=\\"' + safeId + '\\"]") ||' +
-      '           document.getElementById("' + safeId + '") ||' +
-      '           document.querySelector("[id=\\"' + safeId + '\\"], [data-id=\\"' + safeId + '\\"]");' +
+    // Runs entirely in the page's main world: reads the message's menu params off the
+    // Polymer element, then makes the same two InnerTube calls YouTube's own UI makes
+    // when a mod clicks Remove. Auth = SAPISIDHASH computed from the page's own cookie,
+    // which is how YouTube authenticates its internal fetches.
+    const result = await ytExec(
+      '(async function() {' +
+      '  var el = document.querySelector("[data-sc-id=\\"' + safeId + '\\"]");' +
       '  if (!el) {' +
-      '    var prefix = "' + safeText + '";' +
-      '    var aId = "' + safeAuthorId + '";' +
+      '    var aId = "' + safeAuthorId + '", prefix = "' + safeText + '";' +
       '    var all = Array.from(document.querySelectorAll("yt-live-chat-text-message-renderer"));' +
-      '    var cands = aId ? all.filter(function(m) { return (m.getAttribute("author-id") || m.getAttribute("data-author-id") || "") === aId; }) : all;' +
+      '    var cands = aId ? all.filter(function(m) { return (m.getAttribute("author-id")||m.getAttribute("data-author-id")||"") === aId; }) : all;' +
       '    for (var i = cands.length - 1; i >= 0; i--) {' +
-      '      if ((cands[i].querySelector("#message") || cands[i]).textContent.trim().startsWith(prefix)) { el = cands[i]; break; }' +
+      '      if ((cands[i].querySelector("#message")||cands[i]).textContent.trim().startsWith(prefix)) { el = cands[i]; break; }' +
       '    }' +
       '  }' +
-      '  if (!el) return null;' +
-      '  el.scrollIntoView({ block: "nearest" });' +
-      '  var r = el.getBoundingClientRect();' +
-      '  return r.width > 0 ? { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) } : null;' +
+      '  if (!el) return { error: "Message not found in chat" };' +
+      '  var d = el.data || (el.__data && (el.__data.data || el.__data)) || {};' +
+      '  var ep = d.contextMenuEndpoint && d.contextMenuEndpoint.liveChatItemContextMenuEndpoint;' +
+      '  if (!ep || !ep.params) return { error: "no context menu params on message element" };' +
+      '  if (!window.ytcfg) return { error: "ytcfg not available" };' +
+      '  var key = window.ytcfg.get("INNERTUBE_API_KEY"), ctx = window.ytcfg.get("INNERTUBE_CONTEXT");' +
+      '  if (!key || !ctx) return { error: "InnerTube config missing" };' +
+      '  var sapisid = (document.cookie.match(/(?:^|;\\s*)SAPISID=([^;]+)/) || document.cookie.match(/(?:^|;\\s*)__Secure-3PAPISID=([^;]+)/) || [])[1];' +
+      '  if (!sapisid) return { error: "SAPISID cookie not found — not logged in?" };' +
+      '  var time = Math.floor(Date.now() / 1000);' +
+      '  var buf = await crypto.subtle.digest("SHA-1", new TextEncoder().encode(time + " " + sapisid + " https://www.youtube.com"));' +
+      '  var hash = Array.from(new Uint8Array(buf)).map(function(b) { return b.toString(16).padStart(2, "0"); }).join("");' +
+      '  var headers = { "Content-Type": "application/json", "Authorization": "SAPISIDHASH " + time + "_" + hash, "X-Origin": "https://www.youtube.com" };' +
+      '  headers["X-Goog-AuthUser"] = String(window.ytcfg.get("SESSION_INDEX") || "0");' +
+      '  var pageId = window.ytcfg.get("DELEGATED_SESSION_ID");' +
+      '  if (pageId) headers["X-Goog-PageId"] = pageId;' +
+      '  var menuResp = await fetch("/youtubei/v1/live_chat/get_item_context_menu?prettyPrint=false&params=" + encodeURIComponent(ep.params) + "&key=" + encodeURIComponent(key),' +
+      '    { method: "POST", headers: headers, credentials: "include", body: JSON.stringify({ context: ctx }) });' +
+      '  var menuData = await menuResp.json().catch(function() { return null; });' +
+      '  if (!menuResp.ok) return { error: "context menu HTTP " + menuResp.status + ((menuData && menuData.error && menuData.error.message) ? ": " + menuData.error.message : "") };' +
+      '  var items = (menuData && menuData.liveChatItemContextMenuSupportedRenderers && menuData.liveChatItemContextMenuSupportedRenderers.menuRenderer && menuData.liveChatItemContextMenuSupportedRenderers.menuRenderer.items) || [];' +
+      '  var params = null;' +
+      '  for (var j = 0; j < items.length; j++) {' +
+      '    var r = items[j].menuServiceItemRenderer;' +
+      '    if (r && /remove|supprimer/i.test(JSON.stringify(r.text || {})) && r.serviceEndpoint && r.serviceEndpoint.moderateLiveChatEndpoint) {' +
+      '      params = r.serviceEndpoint.moderateLiveChatEndpoint.params; break;' +
+      '    }' +
+      '  }' +
+      '  if (!params) {' +
+      '    var labels = items.map(function(it) {' +
+      '      var rr = it.menuServiceItemRenderer || it.menuNavigationItemRenderer || {};' +
+      '      var t = rr.text || {};' +
+      '      return t.simpleText || (t.runs ? t.runs.map(function(x) { return x.text; }).join("") : Object.keys(it).join("+"));' +
+      '    }).join(" | ");' +
+      '    return { error: "Remove not in menu. Offered: [" + labels + "]" };' +
+      '  }' +
+      '  var modResp = await fetch("/youtubei/v1/live_chat/moderate?prettyPrint=false&key=" + encodeURIComponent(key),' +
+      '    { method: "POST", headers: headers, credentials: "include", body: JSON.stringify({ context: ctx, params: params }) });' +
+      '  var modData = await modResp.json().catch(function() { return null; });' +
+      '  if (!modResp.ok || (modData && modData.error)) return { error: "moderate HTTP " + modResp.status + ((modData && modData.error && modData.error.message) ? ": " + modData.error.message : "") };' +
+      '  return { ok: true };' +
       '})()'
     );
 
-    if (!rect) return { ok: false, error: 'Message not found in chat' };
-
-    ytWin.webContents.sendInputEvent({ type: 'mouseDown', x: rect.x, y: rect.y, button: 'left', clickCount: 1 });
-    ytWin.webContents.sendInputEvent({ type: 'mouseUp', x: rect.x, y: rect.y, button: 'left', clickCount: 1 });
-
-    // Poll until Remove appears in the context menu (up to 3s) rather than a fixed delay
-    const removed = await ytWaitFor(
-      '(function() {' +
-      '  var containers = document.querySelectorAll("tp-yt-paper-listbox, ytd-menu-popup-renderer, yt-live-chat-item-context-menu-renderer, tp-yt-iron-dropdown[opened]");' +
-      '  for (var i = 0; i < containers.length; i++) {' +
-      '    var items = Array.from(containers[i].querySelectorAll("tp-yt-paper-item, ytd-menu-service-item-renderer"));' +
-      '    var hit = items.find(function(x) { return /remove|supprimer/i.test(x.textContent); });' +
-      '    if (hit) { hit.click(); return true; }' +
-      '  }' +
-      '  return false;' +
-      '})()',
-      3000
-    );
-
-    if (!removed) {
-      const info = await ytExec(
-        'Array.from(document.querySelectorAll("tp-yt-paper-listbox, ytd-menu-popup-renderer, yt-live-chat-item-context-menu-renderer, tp-yt-iron-dropdown[opened]"))' +
-        '.map(function(c) { return c.tagName + "[" + Array.from(c.querySelectorAll("tp-yt-paper-item,ytd-menu-service-item-renderer")).map(function(x) { return x.textContent.trim().slice(0, 25); }).join("|") + "]"; }).join(" / ")'
-      ).catch(() => 'unknown');
-      return { ok: false, error: 'No Remove found after 3s. Menus: ' + (info || 'none') };
-    }
-    return { ok: true };
+    if (result && result.ok) return { ok: true };
+    return { ok: false, error: (result && result.error) || 'Delete failed' };
   } catch (e) {
     return { ok: false, error: e.message };
   }
-});
+}
+
+ipcMain.handle('yt:delete', (_, params) => ytDeleteImpl(params));
 
 // Helper: click a user's avatar/name in chat to open their panel, then find a mod action
 async function ytModAction(channelId, actionLabel) {
