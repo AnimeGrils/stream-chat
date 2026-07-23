@@ -3185,23 +3185,23 @@ function openYtTimeoutModal(channelId, username){
   modalAction={type:'yt-timeout',channelId,username};
   el('modalTitle').textContent='Timeout '+username;
   el('modalSub').textContent='Temporarily ban this user from YouTube chat (max 24h).';
-  const snaps=[1,30,60,300,600,1800,3600,7200,21600,43200,86400];
-  const snapLabels=['1s','30s','1m','5m','10m','30m','1h','2h','6h','12h','24h'];
+  const snaps=[10,60,300,600,1800,86400];
+  const snapLabels=['10s','1m','5m','10m','30m','24h'];
   el('modalBody').innerHTML=`
     <div>
       <label>Duration</label>
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-        <input type="range" id="toSlider" min="0" max="${snaps.length-1}" value="3" step="1" style="flex:1;accent-color:var(--twitch)" oninput="onToSlider()">
+        <input type="range" id="toSlider" min="0" max="${snaps.length-1}" value="2" step="1" style="flex:1;accent-color:var(--twitch)" oninput="onToSlider()">
         <input type="text" class="to-input" id="toInput" value="5m" oninput="onToInput()" placeholder="e.g. 10m">
       </div>
       <div class="to-snaps" id="toSnaps">
-        ${snaps.map((s,i)=>`<button class="to-snap${i===3?' active':''}" onclick="setToSnap(${i})">${snapLabels[i]}</button>`).join('')}
+        ${snaps.map((s,i)=>`<button class="to-snap${i===2?' active':''}" onclick="setToSnap(${i})">${snapLabels[i]}</button>`).join('')}
       </div>
     </div>`;
   el('modalConfirmBtn').className='modal-confirm to';
   el('modalConfirmBtn').textContent='Timeout';
   el('modalOverlay').classList.add('open');
-  window._toSnaps=snaps; window._toSnapIdx=3;
+  window._toSnaps=snaps; window._toSnapIdx=2;
 }
 
 function openYtBanModal(channelId, username){
