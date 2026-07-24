@@ -106,6 +106,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
 .msg-time{font-size:calc(var(--chat-font-size, 13px) * 0.77);color:var(--muted);flex-shrink:0;font-family:var(--mono)}
 .msg-badges{display:inline-flex;align-items:center;gap:2px;vertical-align:middle;margin-right:4px;flex-shrink:0}
 .msg-badge{width:18px;height:18px;object-fit:contain;vertical-align:middle;border-radius:2px}
+.collab-avatar{width:18px;height:18px;object-fit:cover;border-radius:50%;flex-shrink:0;background:#333;align-self:center}
 .msg-body{flex:1;min-width:0;word-break:break-word}
 .msg-author{font-weight:700;margin-right:4px;cursor:pointer}.msg-author:hover{text-decoration:underline}
 .msg-sep{color:var(--muted);margin-right:4px;font-weight:400}
@@ -1079,6 +1080,8 @@ async function onTwitchAuthed(){
     twUserId=me.data[0].id;
     twDisplayName=me.data[0].display_name;
     twBroadcasterId=bc.data[0].id;
+    retryPendingCollabChannels();
+    startCollabSessionPolling();
     sessionStorage.setItem('tw_display_name', twDisplayName);
     el('tw-username').textContent='✓ '+twDisplayName+' connected';
     el('tw-username').className='auth-username visible';
@@ -1916,6 +1919,66 @@ async function loadRecentTwitchMsgs(channel){
   }catch(e){}
 }
 
+// ═══════ SHARED CHAT (COLLAB) CHANNEL RESOLUTION ═══════
+// Maps a Twitch room-id to {login, displayName, avatar} for collab-source avatars.
+const collabChannels=new Map();
+const collabResolving=new Set();
+const collabPending=new Set(); // room ids seen while logged out — retried once twToken arrives
+
+async function resolveCollabChannel(roomId){
+  if(!roomId||collabChannels.has(roomId)||collabResolving.has(roomId)) return;
+  if(!twToken){ collabPending.add(roomId); return; }
+  collabResolving.add(roomId);
+  try{
+    const r=await twFetch(`https://api.twitch.tv/helix/users?id=${roomId}`);
+    const u=r?.data?.[0];
+    if(u){
+      collabChannels.set(roomId,{login:u.login,displayName:u.display_name,avatar:u.profile_image_url});
+      document.querySelectorAll(`img.collab-avatar[data-room="${roomId}"]`).forEach(img=>{
+        img.src=safeUrl(u.profile_image_url);
+        img.title=u.display_name;
+        img.style.visibility='visible';
+      });
+    }
+  }catch(e){}
+  finally{ collabResolving.delete(roomId); }
+}
+
+function retryPendingCollabChannels(){
+  const ids=[...collabPending];
+  collabPending.clear();
+  ids.forEach(resolveCollabChannel);
+}
+
+// Whether the local channel currently has an active Twitch Shared Chat (collab) session.
+// Polled via the API rather than inferred from messages, so it's known immediately —
+// not just after a guest channel happens to send something.
+let collabActive=false;
+let collabSessionTimer=null;
+
+async function checkSharedChatSession(){
+  if(!twToken||!twBroadcasterId) return;
+  try{
+    const r=await twFetch(`https://api.twitch.tv/helix/shared_chat/session?broadcaster_id=${twBroadcasterId}`);
+    const session=r?.data?.[0]||null;
+    collabActive=!!session;
+    if(session){
+      const ids=[session.host_broadcaster_id,...(session.participants||[]).map(p=>p.broadcaster_id)];
+      ids.forEach(resolveCollabChannel);
+    }
+  }catch(e){ collabActive=false; }
+}
+
+function startCollabSessionPolling(){
+  stopCollabSessionPolling();
+  checkSharedChatSession();
+  collabSessionTimer=setInterval(checkSharedChatSession,30000);
+}
+function stopCollabSessionPolling(){
+  if(collabSessionTimer){ clearInterval(collabSessionTimer); collabSessionTimer=null; }
+  collabActive=false;
+}
+
 function parseTags(line){
   const ts=line.startsWith('@')?line.slice(1,line.indexOf(' ')):'';
   const t={};
@@ -1944,8 +2007,12 @@ function parseTwitchMsg(line){
     if(isSenderMod) delayBypassIds.add(id);
   }
   const replyParentText=tags['reply-parent-msg-body']||null;
+  // Which channel's avatar to show: source-room-id is the true origin during a shared
+  // (collab) session; room-id (always present) covers everything else, including our
+  // own channel's messages
+  const avatarRoomId=tags['source-room-id']||tags['room-id']||null;
   addMsg({id,platform:'twitch',author:tags['display-name']||nick,
-    text:match[1],emotesTag:tags['emotes']||'',authorId:tags['user-id']||null,badgesTag:tags['badges']||'',badgeInfoTag:tags['badge-info']||'',replyParentId,replyParentUser,replyParentText,
+    text:match[1],emotesTag:tags['emotes']||'',authorId:tags['user-id']||null,badgesTag:tags['badges']||'',badgeInfoTag:tags['badge-info']||'',replyParentId,replyParentUser,replyParentText,avatarRoomId,
     firstMsg:tags['first-msg']==='1',color:tags['color']||rndColor(nick),ts:parseInt(tags['tmi-sent-ts'])||Date.now()});
 }
 function parseTwitchUserNotice(line){
@@ -2540,8 +2607,18 @@ function buildMsg(msg){
   const superBadge = isSuper&&msg.superAmount ? `<span class="super-amount">${esc(msg.superAmount)}</span>` : '';
   const firstChatBanner = msg.firstMsg ? `<div class="first-chat-banner">✨ First-time chatter</div>` : '';
   const delLabel=isDel?(delBy?` (Deleted by ${esc(delBy)})`:' (Deleted by a moderator)'):'';
+  // Only show avatars while a Twitch collab is actually active. When it is: Twitch
+  // messages show the sending channel's own avatar (main or guest); YouTube messages
+  // show the main Twitch channel's avatar, for visual consistency across the feed.
+  let collabAvatar='';
+  const avatarRoomId=collabActive?(msg.platform==='twitch'?msg.avatarRoomId:twBroadcasterId):null;
+  if(avatarRoomId){
+    const info=collabChannels.get(avatarRoomId);
+    if(!info) resolveCollabChannel(avatarRoomId);
+    collabAvatar=`<img class="collab-avatar" data-room="${esc(avatarRoomId)}" src="${info?safeUrl(info.avatar):''}" title="${info?esc(info.displayName):''}" style="${info?'':'visibility:hidden'}">`;
+  }
   div.innerHTML=
-    `<span class="msg-time">${time}</span>`+
+    `${collabAvatar}<span class="msg-time">${time}</span>`+
     `<div class="msg-body">${firstChatBanner}${replyBar}${announceTag}${badgesHtml}<span class="msg-author" style="color:${msg.color}" data-msgid="${esc(msg.id)}">${esc(msg.author)}</span><span class="msg-sep">:</span>${superBadge}<span class="msg-text">${renderedText}</span><span class="del-label">${delLabel}</span></div>`;
   return div;
 }
@@ -3863,6 +3940,7 @@ function renderLoop(){renderMessages();requestAnimationFrame(renderLoop);}
 // ═══════ HELPERS ═══════
 function logoutTwitch(){
   twToken=null; twUserId=null; twBroadcasterId=null;
+  stopCollabSessionPolling();
   sessionStorage.removeItem('tw_token');
   // Token-based auth — no login button to reset
   el('tw-username').className='auth-username';
@@ -4021,6 +4099,7 @@ function resetSession(){
   [...el('alertsBody').querySelectorAll('.alert-item')].forEach(e=>e.remove());
   if(window.electronAPI?.overlayMsg) window.electronAPI.overlayMsg({type:'clear'});
   twToken=null; twUserId=null; twBroadcasterId=null; twDisplayName=null; twBcToken=null;
+  stopCollabSessionPolling();
   ytToken=null; ytDisplayName=null; ytChatId=null; ytNextPage=null;
   clearTimeout(ytHistoricalTimer); ytHistoricalTimer=null;
   pingMessageIds=new Set(); delayBypassIds=new Set(); twUserList.clear(); ytUserList.clear();
